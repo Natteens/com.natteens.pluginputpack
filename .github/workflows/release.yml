@@ -26,10 +26,11 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          # Removido cache para evitar erro por falta de lockfile
 
-      - name: Install dependencies (no lock)
-        run: npm install --no-package-lock
+      # Corrigido para evitar problemas com dependências Unity
+      - name: Install Semantic Release dependencies
+        run: npm ci
+        working-directory: ./ # Certifique-se de que o package.json esteja na raiz do projeto
 
       - name: Release
         uses: cycjimmy/semantic-release-action@v4
