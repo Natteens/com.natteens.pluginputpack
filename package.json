@@ -15,7 +15,7 @@
   },
   "unity": "2023.1",
   "dependencies": {
-    "com.unity.inputsystem": "1.7.0"
+    "com.unity.inputsystem": "1.14.0"
   },
   "samples": [
     {
