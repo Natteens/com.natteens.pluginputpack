@@ -10,10 +10,13 @@
   ],
   "author": {
     "name": "Nathan da Silva Miranda",
-    "email": "natthanmiranda1102@gmail.com",
+    "email": "nathanmiranda1102@gmail.com",
     "url": "https://github.com/Natteens"
   },
   "unity": "2023.1",
+  "dependencies": {
+    "com.unity.inputsystem": "1.7.0"
+  },
   "samples": [
     {
       "displayName": "2D Sample",
