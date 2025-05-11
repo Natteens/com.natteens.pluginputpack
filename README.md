@@ -11,7 +11,7 @@ PlugInputPack é um pacote pronto para uso com o Unity Input System. Ele simplif
 3. Cole a URL:
 
 ```
-https://github.com/Natteens/pluginputpack.git
+https://github.com/Natteens/com.natteens.pluginputpack.git
 ```
 
 ## 🚀 Como usar
