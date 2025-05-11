@@ -1,0 +1,10 @@
+{
+  "name": "com.natteens.pluginputpack.editor",
+  "rootNamespace": "Natteens.pluginputpack",
+  "references": [
+    "com.natteens.pluginputpack"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}

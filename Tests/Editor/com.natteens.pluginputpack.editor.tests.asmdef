@@ -1,0 +1,20 @@
+{
+  "name": "com.natteens.pluginputpack.editor.tests",
+  "rootNamespace": "Natteens.pluginputpack.Tests",
+  "references": [
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner",
+    "com.natteens.pluginputpack",
+    "com.natteens.pluginputpack.editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ]
+}

@@ -1,0 +1,30 @@
+# Unity specific
+Library/
+Temp/
+Logs/
+UserSettings/
+obj/
+Build/
+Builds/
+.DS_Store
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+# IDE
+.vs/
+.idea/
+.vscode/
+# Node.js
+node_modules/
+package-lock.json
