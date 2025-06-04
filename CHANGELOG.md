@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/Natteens/com.natteens.pluginputpack/compare/v1.0.0...v1.0.1) (2025-06-04)
+
+
+### Bug Fixes
+
+* Correção do erro de "Presse" ([d7787a4](https://github.com/Natteens/com.natteens.pluginputpack/commit/d7787a4ef8030fed9643223cdf34eae18cbefa06))
+
 # 1.0.0 (2025-05-11)
 
 
