@@ -139,7 +139,7 @@ namespace PlugInputPack
         /// <summary>
         /// Atualiza os estados e visualização
         /// </summary>
-        private void Update()
+        private void LateUpdate()
         {
             _cache.UpdateStates();
         }
