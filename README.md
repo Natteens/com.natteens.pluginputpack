@@ -270,22 +270,6 @@ Quando habilitado, mostra um painel com:
 - 🎯 Indicadores visuais para Vector2/Vector3
 - 📈 Histórico de atividade
 
-## 🔄 **Changelog**
-
-### **v1.0.2** (Atual)
-- ✅ Sistema de eventos públicos expandido (8 tipos diferentes)
-- ✅ Detecção inteligente de mudanças de valor
-- ✅ Métodos de validação segura (`TryGetInput`, `HasInput`, `GetAllInputNames`)
-- ✅ Tratamento robusto de erros em todo o sistema
-- ✅ URLs corrigidas e dependências atualizadas
-- ✅ Email de contato atualizado
-
-### **v1.0.1**
-- 🐛 Correção do erro de "Presse"
-
-### **v1.0.0**
-- 🎉 Lançamento inicial com base funcional completa
-
 ## 📄 **Licença**
 
 Este projeto está licenciado sob a **MIT License** - veja o arquivo [LICENSE](LICENSE) para detalhes.
