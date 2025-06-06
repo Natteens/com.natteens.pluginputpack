@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.0...v2.0.1) (2025-06-06)
+
+
+### Bug Fixes
+
+* package ([f05d95f](https://github.com/Natteens/com.natteens.pluginputpack/commit/f05d95f94474a79b5bfeec5ba120c860b6178171))
+
 # [2.0.0](https://github.com/Natteens/com.natteens.pluginputpack/compare/v1.0.1...v2.0.0) (2025-06-06)
 
 
