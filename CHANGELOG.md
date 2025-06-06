@@ -1,3 +1,10 @@
+## [2.0.2](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.1...v2.0.2) (2025-06-06)
+
+
+### Bug Fixes
+
+* corrige bug no object pool e adiciona null checks com melhorias no sistema de debug ([7f31d98](https://github.com/Natteens/com.natteens.pluginputpack/commit/7f31d988177f2fc75e502a92ebee59efc7c33d28))
+
 ## [2.0.1](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.0...v2.0.1) (2025-06-06)
 
 

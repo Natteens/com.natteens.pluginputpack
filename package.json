@@ -1,6 +1,6 @@
 {
   "name": "com.natteens.pluginputpack",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "displayName": "Plug Input Pack",
   "description": "PlugInputPack é um pacote reutilizável para facilitar a configuração e uso do Unity Input System. Com uma estrutura modular e clara, ele evita a reescrita de código e agiliza o setup de inputs em qualquer projeto Unity.",
   "keywords": [
