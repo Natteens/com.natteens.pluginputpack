@@ -1,3 +1,15 @@
+# [2.0.0](https://github.com/Natteens/com.natteens.pluginputpack/compare/v1.0.1...v2.0.0) (2025-06-06)
+
+
+### Features
+
+* ✨ implementa sistema completo de eventos e validações avançadas ([25117c4](https://github.com/Natteens/com.natteens.pluginputpack/commit/25117c4c3263ee64666aaa48851578374b0841d3))
+
+
+### BREAKING CHANGES
+
+* Remove configuração de samples (podem ser adicionados futuramente) e seção de contribuição do README temporariamente
+
 ## [1.0.1](https://github.com/Natteens/com.natteens.pluginputpack/compare/v1.0.0...v1.0.1) (2025-06-04)
 
 
