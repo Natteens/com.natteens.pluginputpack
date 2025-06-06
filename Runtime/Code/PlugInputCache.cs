@@ -19,6 +19,12 @@ namespace PlugInputPack
         /// </summary>
         public void RegisterState(InputAction action)
         {
+            if (action == null)
+            {
+                UnityEngine.Debug.LogWarning("PlugInputCache: Tentativa de registrar InputAction nulo!");
+                return;
+            }
+
             if (!_states.ContainsKey(action.name))
             {
                 _states[action.name] = new InputState(action);
@@ -30,6 +36,9 @@ namespace PlugInputPack
         /// </summary>
         public InputState GetState(string actionName)
         {
+            if (string.IsNullOrEmpty(actionName))
+                return null;
+                
             if (_states.TryGetValue(actionName, out var state))
                 return state;
                 
@@ -41,6 +50,9 @@ namespace PlugInputPack
         /// </summary>
         public InputAccessor GetAccessor(string actionName)
         {
+            if (string.IsNullOrEmpty(actionName))
+                return null;
+                
             if (_accessors.TryGetValue(actionName, out var accessor))
                 return accessor;
                 
@@ -52,7 +64,7 @@ namespace PlugInputPack
             if (_accessorPool.Count > 0)
             {
                 newAccessor = _accessorPool.Pop();
-                newAccessor = new InputAccessor(state);
+                newAccessor.Initialize(state); 
             }
             else
             {
@@ -64,13 +76,29 @@ namespace PlugInputPack
         }
         
         /// <summary>
+        /// Retorna um accessor para o pool para reutilização
+        /// </summary>
+        public void ReturnAccessorToPool(string actionName)
+        {
+            if (string.IsNullOrEmpty(actionName))
+                return;
+                
+            if (_accessors.TryGetValue(actionName, out var accessor))
+            {
+                _accessors.Remove(actionName);
+                accessor.Reset(); 
+                _accessorPool.Push(accessor);
+            }
+        }
+        
+        /// <summary>
         /// Atualiza todos os estados
         /// </summary>
         public void UpdateStates()
         {
             foreach (var state in _states.Values)
             {
-                state.Update();
+                state?.Update();
             }
         }
         
@@ -81,7 +109,18 @@ namespace PlugInputPack
         {
             foreach (var state in _states.Values)
             {
-                state.Dispose();
+                state?.Dispose();
+            }
+            
+            foreach (var accessor in _accessors.Values)
+            {
+                accessor?.Dispose();
+            }
+            
+            while (_accessorPool.Count > 0)
+            {
+                var pooledAccessor = _accessorPool.Pop();
+                pooledAccessor?.Dispose();
             }
             
             _states.Clear();
@@ -94,6 +133,9 @@ namespace PlugInputPack
         /// </summary>
         public bool HasInput(string actionName)
         {
+            if (string.IsNullOrEmpty(actionName))
+                return false;
+                
             return _states.ContainsKey(actionName);
         }
         
@@ -111,6 +153,14 @@ namespace PlugInputPack
         public IEnumerable<InputState> GetStates()
         {
             return _states.Values;
+        }
+        
+        /// <summary>
+        /// Obtém estatísticas do cache para debug
+        /// </summary>
+        public string GetCacheStats()
+        {
+            return $"Estados: {_states.Count}, Accessors: {_accessors.Count}, Pool: {_accessorPool.Count}";
         }
     }
 }

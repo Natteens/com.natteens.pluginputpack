@@ -1,10 +1,19 @@
 {
-  "name": "com.natteens.pluginputpack.editor",
-  "rootNamespace": "Natteens.pluginputpack",
-  "references": [
-    "com.natteens.pluginputpack"
-  ],
-  "includePlatforms": [
-    "Editor"
-  ]
+    "name": "com.natteens.pluginputpack.editor",
+    "rootNamespace": "Natteens.pluginputpack",
+    "references": [
+        "com.natteens.pluginputpack",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
 }

@@ -15,10 +15,10 @@ namespace PlugInputPack
         
         [Header("Configurações de Debug")]
         [SerializeField, Tooltip("Habilita logs de debug no console")]
-        private bool enableDebug = false;
+        private bool enableDebug;
         
         [SerializeField, Tooltip("Habilita visualizadores na tela durante debug")]
-        private bool enableVisualDebug = false;
+        private bool enableVisualDebug;
         
         [Header("Configurações Visuais")]
         [SerializeField, Tooltip("Tamanho dos elementos visuais de debug (1-300)")]
@@ -26,7 +26,7 @@ namespace PlugInputPack
         private float debugHandleSize = 100f;
         
         [SerializeField, Tooltip("Cor dos elementos de visualização")]
-        private Color debugHandleColor = new Color(0, 1, 0, 0.8f);
+        private Color debugHandleColor = Color.yellow;
         
         /// <summary>
         /// Asset de ações do Unity Input System
