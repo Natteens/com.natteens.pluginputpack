@@ -1,6 +1,6 @@
 {
     "name": "com.natteens.pluginputpack.editor",
-    "rootNamespace": "Natteens.pluginputpack",
+    "rootNamespace": "PlugInputPack",
     "references": [
         "com.natteens.pluginputpack",
         "Unity.InputSystem"
