@@ -1,7 +1,5 @@
-using UnityEngine;
 using UnityEngine.InputSystem;
 using System.Collections.Generic;
-using System;
 
 namespace PlugInputPack
 {
@@ -10,13 +8,10 @@ namespace PlugInputPack
     /// </summary>
     public class PlugInputCache
     {
-        // Cache de estados de inputs
         private readonly Dictionary<string, InputState> _states = new Dictionary<string, InputState>();
         
-        // Cache de acessores para evitar alocação de memória
         private readonly Dictionary<string, InputAccessor> _accessors = new Dictionary<string, InputAccessor>();
         
-        // Pool de objetos acessores para reutilização
         private readonly Stack<InputAccessor> _accessorPool = new Stack<InputAccessor>();
         
         /// <summary>
@@ -46,32 +41,24 @@ namespace PlugInputPack
         /// </summary>
         public InputAccessor GetAccessor(string actionName)
         {
-            // Retorna do cache se existir
             if (_accessors.TryGetValue(actionName, out var accessor))
                 return accessor;
                 
-            // Obtém o estado para o input
             var state = GetState(actionName);
             if (state == null)
                 return null;
                 
-            // Cria ou obtém um accessor do pool
             InputAccessor newAccessor;
             if (_accessorPool.Count > 0)
             {
-                // Reutiliza um accessor do pool
                 newAccessor = _accessorPool.Pop();
-                // Aqui precisaríamos de uma forma de reinicializar o accessor com o novo estado
-                // Como o InputAccessor é imutável nesta implementação, vamos criar um novo
                 newAccessor = new InputAccessor(state);
             }
             else
             {
-                // Cria um novo accessor
                 newAccessor = new InputAccessor(state);
             }
             
-            // Armazena no cache
             _accessors[actionName] = newAccessor;
             return newAccessor;
         }

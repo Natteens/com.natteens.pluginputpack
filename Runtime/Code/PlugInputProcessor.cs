@@ -36,21 +36,18 @@ namespace PlugInputPack
                         return context.ReadValue<int>();
                         
                     default:
-                        // Tenta ler como botão primeiro
                         try
                         {
                             return context.ReadValueAsButton();
                         }
                         catch
                         {
-                            // Tenta ler como float
                             try 
                             {
                                 return context.ReadValue<float>();
                             }
                             catch
                             {
-                                // Tenta ler como Vector2
                                 try
                                 {
                                     return context.ReadValue<Vector2>();

@@ -17,6 +17,7 @@ namespace PlugInputPack
         private bool _releasedThisFrame;
         private bool _pressedThisFrameBuffer;
         private bool _releasedThisFrameBuffer;
+        
         /// <summary>
         /// Cria um novo estado de input
         /// </summary>
@@ -24,12 +25,8 @@ namespace PlugInputPack
         {
             _action = action;
             _inputType = action.expectedControlType;
-            
-            // Configura callbacks
             _action.performed += OnActionPerformed;
             _action.canceled += OnActionCanceled;
-            
-            // Inicializa com valores padrão
             _currentValue = GetDefaultValue();
             _previousValue = _currentValue;
         }
@@ -41,8 +38,6 @@ namespace PlugInputPack
         {
             _previousValue = _currentValue;
             _currentValue = PlugInputProcessor.ReadValue(context, _inputType);
-            
-            // Detecta se foi pressionado neste frame
             if (IsPressed && !WasPressed)
             {
                 _pressedThisFrameBuffer = true;
@@ -56,8 +51,6 @@ namespace PlugInputPack
         {
             _previousValue = _currentValue;
             _currentValue = GetDefaultValue();
-            
-            // Detecta se foi liberado neste frame
             if (!IsPressed && WasPressed)
             {
                 _releasedThisFrameBuffer = true;
@@ -77,11 +70,8 @@ namespace PlugInputPack
         /// </summary>
         public void Update()
         {
-            // Aplica o buffer
             _pressedThisFrame = _pressedThisFrameBuffer;
             _releasedThisFrame = _releasedThisFrameBuffer;
-            
-            // Reset do buffer para próximo frame
             _pressedThisFrameBuffer = false;
             _releasedThisFrameBuffer = false;
         }

@@ -12,36 +12,31 @@ namespace PlugInputPack
         private bool _isEnabled = false;
         private Color _handleColor = new Color(0, 1, 0, 0.85f);
         private Rect _debugPanelRect;
-        private float _handleScale = 1.0f; // Fator de escala baseado no debugHandleSize
+        private float _handleScale = 1.0f;
         
-        // Cache de valores para evitar alocações excessivas
         private readonly Dictionary<string, string> _valueCache = new Dictionary<string, string>();
         private readonly List<string> _activeInputs = new List<string>();
         private readonly HashSet<string> _lastFrameInputs = new HashSet<string>();
         
-        // Inatividade de inputs
         private Dictionary<string, float> _inactivityTimers = new Dictionary<string, float>();
         private const float INACTIVITY_THRESHOLD = 0.2f;
         
-        // Texturas para desenho
         private Texture2D _panelTexture;
         private Texture2D _lineTexture;
         private Texture2D _circleTexture;
         
-        // Estilos para GUI
         private GUIStyle _headerStyle;
         private GUIStyle _labelStyle;
         private GUIStyle _valueStyle;
         private GUIStyle _centeredStyle;
         private GUIStyle _panelStyle;
         
-        // Constantes para layout - Ajustáveis pelo fator de escala
-        private float _panelWidth = 300f;  // Base width, será multiplicada por _handleScale
-        private float _panelHeight = 320f; // Base height, será multiplicada por _handleScale
-        private float _lineHeight = 24f;   // Base line height, será multiplicada por _handleScale
-        private float _padding = 10f;      // Base padding, será multiplicado por _handleScale
-        private float _arrowSize = 16f;    // Base arrow size, será multiplicado por _handleScale
-        private float _arrowAreaWidth = 50f; // Base arrow area width, será multiplicada por _handleScale
+        private float _panelWidth = 300f;  
+        private float _panelHeight = 320f;
+        private float _lineHeight = 24f;
+        private float _padding = 10f;   
+        private float _arrowSize = 16f;    
+        private float _arrowAreaWidth = 50f; 
         
         /// <summary>
         /// Inicializa o visualizador
@@ -50,13 +45,11 @@ namespace PlugInputPack
         {
             _isEnabled = enabled;
             _handleColor = handleColor;
-            _handleScale = handleSize; // Usa o handleSize como fator de escala
+            _handleScale = handleSize; 
             
-            // Ajusta dimensões com base na escala
             float scaledPanelWidth = _panelWidth * _handleScale;
             float scaledPanelHeight = _panelHeight * _handleScale;
             
-            // Posiciona o painel no canto inferior esquerdo
             _debugPanelRect = new Rect(
                 10, 
                 Screen.height - scaledPanelHeight - 10, 
@@ -64,13 +57,10 @@ namespace PlugInputPack
                 scaledPanelHeight
             );
             
-            // Cria texturas necessárias
             CreateTextures();
             
-            // Inicializa estilos
             InitializeStyles();
             
-            // Limpa caches
             _activeInputs.Clear();
             _lastFrameInputs.Clear();
             _valueCache.Clear();
@@ -82,15 +72,12 @@ namespace PlugInputPack
         /// </summary>
         private void CreateTextures()
         {
-            // Painel com cantos arredondados
             _panelTexture = CreateRoundedRectTexture(32, 32, 8, new Color(0.12f, 0.12f, 0.14f, 0.92f));
             
-            // Textura para linhas
             _lineTexture = new Texture2D(1, 1);
             _lineTexture.SetPixel(0, 0, Color.white);
             _lineTexture.Apply();
             
-            // Textura para círculos
             _circleTexture = CreateCircleTexture(16, Color.white);
         }
         
@@ -99,11 +86,9 @@ namespace PlugInputPack
         /// </summary>
         private void InitializeStyles()
         {
-            // Ajusta tamanho das fontes com base na escala
             int headerSize = Mathf.RoundToInt(14 * _handleScale);
             int normalSize = Mathf.RoundToInt(12 * _handleScale);
             
-            // Estilo do título
             _headerStyle = new GUIStyle();
             _headerStyle.normal.textColor = new Color(0.9f, 0.9f, 0.9f, 1.0f);
             _headerStyle.fontSize = headerSize;
@@ -111,28 +96,24 @@ namespace PlugInputPack
             _headerStyle.margin = new RectOffset(4, 4, 4, 4);
             _headerStyle.alignment = TextAnchor.MiddleLeft;
             
-            // Estilo dos rótulos
             _labelStyle = new GUIStyle();
             _labelStyle.normal.textColor = new Color(0.8f, 0.8f, 0.8f, 1.0f);
             _labelStyle.fontSize = normalSize;
             _labelStyle.margin = new RectOffset(4, 4, 2, 2);
             _labelStyle.alignment = TextAnchor.MiddleLeft;
             
-            // Estilo dos valores (agora CENTRALIZADOS)
             _valueStyle = new GUIStyle();
             _valueStyle.normal.textColor = new Color(0.2f, 0.8f, 1.0f, 1.0f);
             _valueStyle.fontSize = normalSize;
             _valueStyle.fontStyle = FontStyle.Bold;
             _valueStyle.margin = new RectOffset(4, 4, 2, 2);
-            _valueStyle.alignment = TextAnchor.MiddleCenter; // MUDADO para centralizar
+            _valueStyle.alignment = TextAnchor.MiddleCenter;
             
-            // Estilo para mensagens centralizadas
             _centeredStyle = new GUIStyle();
             _centeredStyle.normal.textColor = new Color(0.7f, 0.7f, 0.7f, 0.8f);
             _centeredStyle.fontSize = normalSize;
             _centeredStyle.alignment = TextAnchor.MiddleCenter;
             
-            // Estilo do painel
             _panelStyle = new GUIStyle();
             _panelStyle.normal.background = _panelTexture;
             _panelStyle.border = new RectOffset(8, 8, 8, 8);
@@ -152,7 +133,6 @@ namespace PlugInputPack
             if (!_isEnabled)
                 return;
             
-            // Valores escalados para uso no layout
             float scaledPanelWidth = _panelWidth * _handleScale;
             float scaledPanelHeight = _panelHeight * _handleScale;
             float scaledLineHeight = _lineHeight * _handleScale;
@@ -160,18 +140,15 @@ namespace PlugInputPack
             float scaledArrowSize = _arrowSize * _handleScale;
             float scaledArrowAreaWidth = _arrowAreaWidth * _handleScale;
                 
-            // Atualiza posição do painel se necessário
-            if (_debugPanelRect.y != Screen.height - scaledPanelHeight - 10)
+            if (!Mathf.Approximately(_debugPanelRect.y, Screen.height - scaledPanelHeight - 10))
             {
                 _debugPanelRect.y = Screen.height - scaledPanelHeight - 10;
                 _debugPanelRect.width = scaledPanelWidth;
                 _debugPanelRect.height = scaledPanelHeight;
             }
             
-            // Desenha o painel de fundo
             GUI.Box(_debugPanelRect, "", _panelStyle);
             
-            // Título
             Rect headerRect = new Rect(
                 _debugPanelRect.x + scaledPadding,
                 _debugPanelRect.y + scaledPadding,
@@ -180,7 +157,6 @@ namespace PlugInputPack
             );
             GUI.Label(headerRect, "Inputs Ativos", _headerStyle);
             
-            // Linha separadora
             Rect lineRect = new Rect(
                 _debugPanelRect.x + (scaledPadding * 1.5f),
                 headerRect.y + headerRect.height + 5 * _handleScale,
@@ -191,7 +167,6 @@ namespace PlugInputPack
             GUI.DrawTexture(lineRect, _lineTexture);
             GUI.color = Color.white;
             
-            // Área de conteúdo
             float contentY = lineRect.y + lineRect.height + 5 * _handleScale;
             float contentHeight = _debugPanelRect.height - contentY + _debugPanelRect.y - scaledPadding;
             Rect contentRect = new Rect(
@@ -201,21 +176,17 @@ namespace PlugInputPack
                 contentHeight
             );
             
-            // Controle de inputs ativos
             _activeInputs.Clear();
             HashSet<string> currentActiveInputs = new HashSet<string>();
             
-            // Desenha cada input
             float y = contentRect.y;
             int index = 0;
             float maxItems = Mathf.Floor(contentHeight / scaledLineHeight);
             
             foreach (var state in cache.GetStates())
             {
-                // Gerencia o timer de inatividade
                 ProcessInputState(state);
                 
-                // Verifica se o input deve ser exibido
                 if (ShouldDisplayInput(state))
                 {
                     if (index >= maxItems)
@@ -224,7 +195,6 @@ namespace PlugInputPack
                     currentActiveInputs.Add(state.Name);
                     _activeInputs.Add(state.Name);
                     
-                    // Destaca linhas alternadas para melhor legibilidade
                     if (index % 2 == 1)
                     {
                         Rect rowBgRect = new Rect(
@@ -238,7 +208,6 @@ namespace PlugInputPack
                         GUI.color = Color.white;
                     }
                     
-                    // Efeito de highlight para inputs recém ativados
                     if (state.IsPressed && !_lastFrameInputs.Contains(state.Name))
                     {
                         Rect glowRect = new Rect(
@@ -252,7 +221,6 @@ namespace PlugInputPack
                         GUI.color = Color.white;
                     }
                     
-                    // Nome do input - usa 35% da largura disponível
                     Rect nameRect = new Rect(
                         contentRect.x + 5 * _handleScale,
                         y,
@@ -261,13 +229,11 @@ namespace PlugInputPack
                     );
                     GUI.Label(nameRect, state.Name, _labelStyle);
                     
-                    // Valor do input - CENTRALIZADO, usa 40% da largura
                     string valueText = FormatValue(state);
                     
-                    // Calcula espaço para o valor, agora CENTRALIZADO entre o nome e a seta
                     float valueWidth = contentRect.width * 0.35f;
                     Rect valueRect = new Rect(
-                        nameRect.x + nameRect.width + 5 * _handleScale, // Posicionado após o nome
+                        nameRect.x + nameRect.width + 5 * _handleScale, 
                         y,
                         valueWidth,
                         scaledLineHeight
@@ -275,13 +241,11 @@ namespace PlugInputPack
                     
                     GUI.Label(valueRect, valueText, _valueStyle);
                     
-                    // Para valores Vector2, desenha uma seta indicativa com tamanho aumentado
                     if (state.InputType == "Vector2")
                     {
                         Vector2 direction = state.AsVector2;
                         if (direction.magnitude > 0.01f)
                         {
-                            // Área da seta agora bem maior e no extremo direito
                             Rect arrowRect = new Rect(
                                 contentRect.x + contentRect.width - scaledArrowAreaWidth + 5 * _handleScale,
                                 y + (scaledLineHeight * 0.5f) - (scaledArrowSize),
@@ -289,7 +253,6 @@ namespace PlugInputPack
                                 scaledArrowSize * 2
                             );
                             
-                            // Nova implementação de seta com tamanho baseado no handleScale
                             DrawSimplifiedDirectionArrow(arrowRect, direction, _handleColor);
                         }
                     }
@@ -299,14 +262,12 @@ namespace PlugInputPack
                 }
             }
             
-            // Atualiza os inputs do último frame
             _lastFrameInputs.Clear();
             foreach (string input in currentActiveInputs)
             {
                 _lastFrameInputs.Add(input);
             }
             
-            // Se não há inputs ativos
             if (_activeInputs.Count == 0)
             {
                 GUI.Label(contentRect, "Nenhum input ativo", _centeredStyle);
@@ -320,7 +281,6 @@ namespace PlugInputPack
         {
             string id = state.Name;
             
-            // Lógica para Vector2
             if (state.InputType == "Vector2")
             {
                 Vector2 vec = state.AsVector2;
@@ -340,7 +300,6 @@ namespace PlugInputPack
                     _inactivityTimers[id] = 0f;
                 }
             }
-            // Lógica para outros tipos
             else
             {
                 if (!state.IsPressed)
@@ -368,7 +327,6 @@ namespace PlugInputPack
         {
             string id = state.Name;
             
-            // Para Vector2
             if (state.InputType == "Vector2")
             {
                 Vector2 vec = state.AsVector2;
@@ -376,7 +334,6 @@ namespace PlugInputPack
                        !_inactivityTimers.ContainsKey(id) || 
                        _inactivityTimers[id] < INACTIVITY_THRESHOLD;
             }
-            // Para outros tipos
             else
             {
                 return state.IsPressed || 
@@ -392,10 +349,8 @@ namespace PlugInputPack
         {
             string id = state.Name;
             
-            // Usa cache para evitar alocações
             if (_valueCache.TryGetValue(id, out string cached))
             {
-                // Para Vector2, sempre atualiza para valores em tempo real
                 if (state.InputType != "Vector2" && !state.IsPressed)
                     return cached;
             }
@@ -440,14 +395,11 @@ namespace PlugInputPack
         /// </summary>
         private void DrawSimplifiedDirectionArrow(Rect rect, Vector2 direction, Color color)
         {
-            // Normaliza a direção e inverte Y para corresponder à direção na tela
             Vector2 normalizedDir = direction.normalized;
             normalizedDir.y = -normalizedDir.y;
             
-            // Ponto central da área
             Vector2 center = new Vector2(rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f);
             
-            // Desenha fundo para a área da seta - aumentado com base em _handleScale
             Rect bgRect = new Rect(
                 rect.x - 2 * _handleScale, 
                 rect.y - 2 * _handleScale, 
@@ -458,21 +410,17 @@ namespace PlugInputPack
             GUI.DrawTexture(bgRect, _circleTexture);
             GUI.color = Color.white;
             
-            // Desenha círculo de referência
             Handles.color = new Color(color.r, color.g, color.b, 0.3f);
             Handles.DrawWireDisc(center, Vector3.forward, rect.width * 0.45f);
             
-            // Calcula posição da bolinha proporcional à magnitude do vetor
-            float magnitude = Mathf.Clamp01(direction.magnitude); // Normaliza entre 0-1
+            float magnitude = Mathf.Clamp01(direction.magnitude);
             Vector2 circlePos = center + normalizedDir * (rect.width * 0.45f * magnitude);
             
-            // Desenha a linha do centro até a bolinha - ESPESSURA AUMENTADA
             Handles.color = color;
-            float lineThickness = 2f * _handleScale; // Espessura da linha escalada
+            float lineThickness = 2f * _handleScale; 
             Handles.DrawLine(center, circlePos, lineThickness);
             
-            // Desenha a bolinha na ponta - TAMANHO AUMENTADO
-            float circleSize = rect.width * 0.18f * _handleScale; // Tamanho da bolinha escalado
+            float circleSize = rect.width * 0.18f * _handleScale; 
             Handles.color = color;
             Handles.DrawSolidDisc(circlePos, Vector3.forward, circleSize);
             
@@ -487,7 +435,6 @@ namespace PlugInputPack
             Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             texture.filterMode = FilterMode.Bilinear;
             
-            // Preenche com transparência
             Color[] colors = new Color[width * height];
             for (int i = 0; i < colors.Length; i++)
             {
@@ -496,41 +443,39 @@ namespace PlugInputPack
             
             texture.SetPixels(colors);
             
-            // Desenha o retângulo com cantos arredondados
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
                 {
-                    // Cantos
-                    if (x < radius && y < radius) // Superior esquerdo
+                    if (x < radius && y < radius)
                     {
                         float distance = Vector2.Distance(new Vector2(x, y), new Vector2(radius, radius));
                         if (distance <= radius)
                             texture.SetPixel(x, y, color);
                     }
-                    else if (x >= width - radius && y < radius) // Superior direito
+                    else if (x >= width - radius && y < radius)
                     {
                         float distance = Vector2.Distance(new Vector2(x, y), new Vector2(width - radius, radius));
                         if (distance <= radius)
                             texture.SetPixel(x, y, color);
                     }
-                    else if (x < radius && y >= height - radius) // Inferior esquerdo
+                    else if (x < radius && y >= height - radius) 
                     {
                         float distance = Vector2.Distance(new Vector2(x, y), new Vector2(radius, height - radius));
                         if (distance <= radius)
                             texture.SetPixel(x, y, color);
                     }
-                    else if (x >= width - radius && y >= height - radius) // Inferior direito
+                    else if (x >= width - radius && y >= height - radius) 
                     {
                         float distance = Vector2.Distance(new Vector2(x, y), new Vector2(width - radius, height - radius));
                         if (distance <= radius)
                             texture.SetPixel(x, y, color);
                     }
-                    else if (x >= radius && x < width - radius) // Centro horizontal
+                    else if (x >= radius && x < width - radius) 
                     {
                         texture.SetPixel(x, y, color);
                     }
-                    else if (y >= radius && y < height - radius) // Centro vertical
+                    else if (y >= radius && y < height - radius) 
                     {
                         texture.SetPixel(x, y, color);
                     }
@@ -562,7 +507,6 @@ namespace PlugInputPack
                     
                     if (distSq <= radiusSq)
                     {
-                        // Suaviza as bordas
                         float distance = Mathf.Sqrt(distSq);
                         float alpha = Mathf.Clamp01((radius - distance) / radius);
                         

@@ -1,38 +1,28 @@
 {
   "name": "com.natteens.pluginputpack",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "Plug Input Pack",
-  "description": "PlugInputPack é um pacote reutilizável para facilitar a configuração e uso do Unity Input System. Com uma estrutura modular e clara, ele evita a reescrita de código e agiliza o setup de inputs em qualquer projeto.",
+  "description": "PlugInputPack é um pacote reutilizável para facilitar a configuração e uso do Unity Input System. Com uma estrutura modular e clara, ele evita a reescrita de código e agiliza o setup de inputs em qualquer projeto Unity.",
   "keywords": [
     "Unity",
+    "Input System",
     "GameDev",
+    "Input Management",
+    "Unity Package",
     "pluginputpack"
   ],
   "author": {
     "name": "Nathan da Silva Miranda",
-    "email": "nathanmiranda1102@gmail.com",
+    "email": "natteens.social@gmail.com",
     "url": "https://github.com/Natteens"
   },
-  "unity": "2023.1",
-  "dependencies": {},
-  "samples": [
-    {
-      "displayName": "2D Sample",
-      "description": "Exemplo demonstrando o uso do Plug Input Pack em um jogo 2D.",
-      "path": "Samples~/2D Sample"
-    },
-    {
-      "displayName": "3D Sample",
-      "description": "Exemplo demonstrando o uso do Plug Input Pack em um jogo 3D.",
-      "path": "Samples~/3D Sample"
-    },
-    {
-      "displayName": "Utilities Sample",
-      "description": "Utilitários e prefabs de exemplo para testes e desenvolvimento.",
-      "path": "Samples~/Utilities Sample"
-    }
-  ],
-  "documentationUrl": "https://github.com/Natteens/pluginputpack",
-  "changelogUrl": "https://github.com/Natteens/pluginputpack/blob/main/CHANGELOG.md",
-  "licensesUrl": "https://github.com/Natteens/pluginputpack/blob/main/LICENSE.md"
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.unity.inputsystem": "1.4.0"
+  },
+  "documentationUrl": "https://github.com/Natteens/com.natteens.pluginputpack/blob/main/README.md",
+  "changelogUrl": "https://github.com/Natteens/com.natteens.pluginputpack/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/Natteens/com.natteens.pluginputpack/blob/main/LICENSE",
+  "type": "library"
 }

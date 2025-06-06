@@ -65,7 +65,6 @@ namespace PlugInputPack
             if (!_lastLoggedValues.TryGetValue(actionName, out object lastValue))
                 return true;
             
-            // Verificações específicas por tipo
             if (value is Vector2 v2Current && lastValue is Vector2 v2Last)
                 return Vector2.Distance(v2Current, v2Last) > 0.1f;
             
