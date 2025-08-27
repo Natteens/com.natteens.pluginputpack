@@ -14,8 +14,19 @@ namespace PlugInputPack.Editor
         private SerializedProperty _debugHandleSizeProperty;
         private SerializedProperty _debugHandleColorProperty;
         
+        private SerializedProperty _enableDeviceManagementProperty;
+        private SerializedProperty _strictDeviceIsolationProperty;
+        private SerializedProperty _deviceSwitchCooldownProperty;
+        private SerializedProperty _allowedDevicesProperty;
+        
+        private SerializedProperty _hideCursorOnGamepadProperty;
+        private SerializedProperty _lockCursorOnGamepadProperty;
+        private SerializedProperty _gamepadCursorLockModeProperty;
+        
         private bool _showAdvancedSettings = false;
         private bool _showInputActions;
+        private bool _showDeviceSettings = true;
+        private bool _showCursorSettings = true;
         
         private GUIStyle _headerStyle;
         private GUIStyle _boxStyle;
@@ -28,6 +39,15 @@ namespace PlugInputPack.Editor
             _enableVisualDebugProperty = serializedObject.FindProperty("enableVisualDebug");
             _debugHandleSizeProperty = serializedObject.FindProperty("debugHandleSize");
             _debugHandleColorProperty = serializedObject.FindProperty("debugHandleColor");
+            
+            _enableDeviceManagementProperty = serializedObject.FindProperty("enableDeviceManagement");
+            _strictDeviceIsolationProperty = serializedObject.FindProperty("strictDeviceIsolation");
+            _deviceSwitchCooldownProperty = serializedObject.FindProperty("deviceSwitchCooldown");
+            _allowedDevicesProperty = serializedObject.FindProperty("allowedDevices");
+            
+            _hideCursorOnGamepadProperty = serializedObject.FindProperty("hideCursorOnGamepad");
+            _lockCursorOnGamepadProperty = serializedObject.FindProperty("lockCursorOnGamepad");
+            _gamepadCursorLockModeProperty = serializedObject.FindProperty("gamepadCursorLockMode");
         }
         
         private void InitializeStyles()
@@ -66,6 +86,14 @@ namespace PlugInputPack.Editor
             
             EditorGUILayout.Space(10);
             
+            DrawDeviceManagementSettings();
+            
+            EditorGUILayout.Space(10);
+            
+            DrawCursorSettings();
+            
+            EditorGUILayout.Space(10);
+            
             DrawDebugSettings();
             
             EditorGUILayout.Space(10);
@@ -93,7 +121,6 @@ namespace PlugInputPack.Editor
                 serializedObject.ApplyModifiedProperties();
             }
             
-            // Quick actions
             EditorGUILayout.BeginHorizontal();
             
             if (GUILayout.Button("Criar Input Actions", GUILayout.Height(25)))
@@ -111,6 +138,77 @@ namespace PlugInputPack.Editor
             }
             
             EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.EndVertical();
+        }
+        
+        private void DrawDeviceManagementSettings()
+        {
+            EditorGUILayout.BeginVertical(_boxStyle);
+            
+            _showDeviceSettings = EditorGUILayout.Foldout(_showDeviceSettings, "Gerenciamento de Dispositivos", true, EditorStyles.foldoutHeader);
+            
+            if (_showDeviceSettings)
+            {
+                EditorGUILayout.PropertyField(_enableDeviceManagementProperty, 
+                    new GUIContent("Habilitar Gerenciamento", "Ativa detecção automática de dispositivos"));
+                
+                if (_enableDeviceManagementProperty.boolValue)
+                {
+                    EditorGUI.indentLevel++;
+                    
+                    EditorGUILayout.PropertyField(_strictDeviceIsolationProperty, 
+                        new GUIContent("Isolamento Estrito", "Permite apenas inputs do dispositivo atual"));
+                    
+                    EditorGUILayout.PropertyField(_deviceSwitchCooldownProperty, 
+                        new GUIContent("Cooldown de Troca", "Tempo mínimo entre mudanças de dispositivo"));
+                    
+                    EditorGUILayout.PropertyField(_allowedDevicesProperty, 
+                        new GUIContent("Dispositivos Permitidos", "Lista de tipos de dispositivos permitidos (vazio = todos)"));
+                    
+                    EditorGUI.indentLevel--;
+                    
+                    if (_strictDeviceIsolationProperty.boolValue)
+                    {
+                        EditorGUILayout.HelpBox("Isolamento Estrito: Apenas inputs do dispositivo atual serão processados.", MessageType.Info);
+                    }
+                }
+                else
+                {
+                    EditorGUILayout.HelpBox("Gerenciamento de dispositivos desabilitado. Todos os inputs serão processados normalmente.", MessageType.Info);
+                }
+            }
+            
+            EditorGUILayout.EndVertical();
+        }
+        
+        private void DrawCursorSettings()
+        {
+            EditorGUILayout.BeginVertical(_boxStyle);
+            
+            _showCursorSettings = EditorGUILayout.Foldout(_showCursorSettings, "Configurações do Cursor", true, EditorStyles.foldoutHeader);
+            
+            if (_showCursorSettings)
+            {
+                EditorGUILayout.PropertyField(_hideCursorOnGamepadProperty, 
+                    new GUIContent("Ocultar Cursor com Gamepad", "Oculta o cursor quando gamepad é o dispositivo ativo"));
+                
+                EditorGUILayout.PropertyField(_lockCursorOnGamepadProperty, 
+                    new GUIContent("Bloquear Cursor com Gamepad", "Aplica modo de bloqueio do cursor com gamepad"));
+                
+                if (_lockCursorOnGamepadProperty.boolValue)
+                {
+                    EditorGUI.indentLevel++;
+                    EditorGUILayout.PropertyField(_gamepadCursorLockModeProperty, 
+                        new GUIContent("Modo de Bloqueio", "Modo de bloqueio aplicado quando gamepad está ativo"));
+                    EditorGUI.indentLevel--;
+                }
+                
+                if (_hideCursorOnGamepadProperty.boolValue || _lockCursorOnGamepadProperty.boolValue)
+                {
+                    EditorGUILayout.HelpBox("As configurações de cursor serão aplicadas automaticamente quando o gamepad for detectado.", MessageType.Info);
+                }
+            }
             
             EditorGUILayout.EndVertical();
         }
@@ -137,7 +235,6 @@ namespace PlugInputPack.Editor
                     new GUIContent("Cor dos Elementos", "Cor dos elementos de visualização"));
                 
                 EditorGUI.indentLevel--;
-                
             }
             
             EditorGUILayout.EndVertical();
@@ -191,17 +288,17 @@ namespace PlugInputPack.Editor
         private void DrawValidationAndActions()
         {
             EditorGUILayout.BeginVertical(_boxStyle);
-            EditorGUILayout.LabelField("✓ Validação", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Validação", EditorStyles.boldLabel);
             
             var inputReader = target as PlugInputReader;
             
             if (inputReader.IsValid())
             {
-                EditorGUILayout.HelpBox($"✅ Configuração válida!\n{inputReader.GetDebugInfo()}", MessageType.Info);
+                EditorGUILayout.HelpBox($"Configuração válida!\n{inputReader.GetDebugInfo()}", MessageType.Info);
             }
             else
             {
-                EditorGUILayout.HelpBox("⚠️ Configuração incompleta! Verifique se o Input Action Asset está configurado e possui ações.", MessageType.Warning);
+                EditorGUILayout.HelpBox("Configuração incompleta! Verifique se o Input Action Asset está configurado e possui ações.", MessageType.Warning);
             }
             
             EditorGUILayout.Space(5);
@@ -213,7 +310,7 @@ namespace PlugInputPack.Editor
                 bool isValid = inputReader.IsValid();
                 EditorUtility.DisplayDialog(
                     "Validação do Input Reader",
-                    isValid ? $"✅ Configuração válida!\n\n{inputReader.GetDebugInfo()}" : "❌ Configuração inválida!",
+                    isValid ? $"Configuração válida!\n\n{inputReader.GetDebugInfo()}" : "Configuração inválida!",
                     "OK"
                 );
             }

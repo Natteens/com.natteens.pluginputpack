@@ -28,6 +28,30 @@ namespace PlugInputPack
         [SerializeField, Tooltip("Cor dos elementos de visualização")]
         private Color debugHandleColor = Color.yellow;
         
+        [Header("Gerenciamento de Dispositivos")]
+        [SerializeField, Tooltip("Habilita detecção automática de dispositivos")]
+        private bool enableDeviceManagement = true;
+        
+        [SerializeField, Tooltip("Isola inputs por dispositivo atual")]
+        private bool strictDeviceIsolation = false;
+        
+        [SerializeField, Tooltip("Tempo de cooldown entre trocas de dispositivo (segundos)")]
+        [Range(0f, 2f)]
+        private float deviceSwitchCooldown = 0.1f;
+        
+        [SerializeField, Tooltip("Dispositivos permitidos (vazio = todos)")]
+        private PlugInputDeviceManager.DeviceType[] allowedDevices = new PlugInputDeviceManager.DeviceType[0];
+        
+        [Header("Configurações do Cursor")]
+        [SerializeField, Tooltip("Oculta cursor quando usando gamepad")]
+        private bool hideCursorOnGamepad = true;
+        
+        [SerializeField, Tooltip("Bloqueia cursor quando usando gamepad")]
+        private bool lockCursorOnGamepad = false;
+        
+        [SerializeField, Tooltip("Modo do cursor quando gamepad está ativo")]
+        private CursorLockMode gamepadCursorLockMode = CursorLockMode.None;
+        
         /// <summary>
         /// Asset de ações do Unity Input System
         /// </summary>
@@ -52,6 +76,41 @@ namespace PlugInputPack
         /// Cor dos elementos visuais
         /// </summary>
         public Color DebugHandleColor => debugHandleColor;
+        
+        /// <summary>
+        /// Define se o gerenciamento de dispositivos está ativo
+        /// </summary>
+        public bool EnableDeviceManagement => enableDeviceManagement;
+        
+        /// <summary>
+        /// Define se o isolamento estrito está ativo
+        /// </summary>
+        public bool StrictDeviceIsolation => strictDeviceIsolation;
+        
+        /// <summary>
+        /// Tempo de cooldown entre trocas de dispositivo
+        /// </summary>
+        public float DeviceSwitchCooldown => deviceSwitchCooldown;
+        
+        /// <summary>
+        /// Dispositivos permitidos
+        /// </summary>
+        public PlugInputDeviceManager.DeviceType[] AllowedDevices => allowedDevices;
+        
+        /// <summary>
+        /// Define se deve ocultar cursor com gamepad
+        /// </summary>
+        public bool HideCursorOnGamepad => hideCursorOnGamepad;
+        
+        /// <summary>
+        /// Define se deve bloquear cursor com gamepad
+        /// </summary>
+        public bool LockCursorOnGamepad => lockCursorOnGamepad;
+        
+        /// <summary>
+        /// Modo do cursor quando gamepad está ativo
+        /// </summary>
+        public CursorLockMode GamepadCursorLockMode => gamepadCursorLockMode;
         
         /// <summary>
         /// Valida a configuração do Input Reader
@@ -87,7 +146,10 @@ namespace PlugInputPack
                 totalActions += map.actions.Count;
             }
             
-            return $"Mapas: {inputActionAsset.actionMaps.Count}, Ações: {totalActions}";
+            var deviceInfo = enableDeviceManagement ? 
+                $", Dispositivos: {(allowedDevices.Length > 0 ? allowedDevices.Length.ToString() : "Todos")}" : "";
+            
+            return $"Mapas: {inputActionAsset.actionMaps.Count}, Ações: {totalActions}{deviceInfo}";
         }
         
         #if UNITY_EDITOR
@@ -98,6 +160,7 @@ namespace PlugInputPack
         {
             debugHandleSize = Mathf.Clamp(debugHandleSize, 1f, 300f);
             debugHandleColor.a = Mathf.Clamp01(debugHandleColor.a);
+            deviceSwitchCooldown = Mathf.Clamp(deviceSwitchCooldown, 0f, 2f);
         }
         #endif
     }

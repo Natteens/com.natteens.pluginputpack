@@ -16,6 +16,7 @@ namespace PlugInputPack
         private PlugInputCache _cache;
         private PlugInputDebugger _debugger;
         private PlugInputVisualizer _visualizer;
+        private PlugInputDeviceManager _deviceManager;
         
         public static event Action<string, object> OnInputPerformed;
         public static event Action<string> OnInputCanceled;
@@ -27,13 +28,38 @@ namespace PlugInputPack
         public static event Action OnInputSystemInitialized;
         public static event Action OnInputSystemDestroyed;
         
+        public static event Action<PlugInputDeviceManager.DeviceType, PlugInputDeviceManager.DeviceType> OnDeviceChanged;
+        public static event Action<InputDevice> OnDeviceConnected;
+        public static event Action<InputDevice> OnDeviceDisconnected;
+        public static event Action<PlugInputDeviceManager.DeviceType> OnDeviceFiltered;
+        
         private Dictionary<string, object> _lastValues = new Dictionary<string, object>();
+        private CursorLockMode _originalCursorLockMode;
+        private bool _originalCursorVisible;
+        
+        /// <summary>
+        /// Gerenciador de dispositivos
+        /// </summary>
+        public PlugInputDeviceManager DeviceManager => _deviceManager;
+        
+        /// <summary>
+        /// Tipo de dispositivo atual
+        /// </summary>
+        public PlugInputDeviceManager.DeviceType CurrentDeviceType => _deviceManager?.CurrentDeviceType ?? PlugInputDeviceManager.DeviceType.Unknown;
+        
+        /// <summary>
+        /// Nome do dispositivo atual
+        /// </summary>
+        public string CurrentDeviceName => _deviceManager?.CurrentDeviceName ?? "Nenhum";
         
         private void Awake()
         {
             _cache = new PlugInputCache();
             _debugger = new PlugInputDebugger();
             _visualizer = new PlugInputVisualizer();
+            _deviceManager = new PlugInputDeviceManager();
+            
+            StoreCursorState();
             
             if (inputReader != null && inputReader.InputActionAsset != null)
             {
@@ -43,6 +69,15 @@ namespace PlugInputPack
             {
                 Debug.LogWarning("PlugInputPack: Input Reader ou Input Action Asset não configurado!");
             }
+        }
+        
+        /// <summary>
+        /// Armazena estado inicial do cursor
+        /// </summary>
+        private void StoreCursorState()
+        {
+            _originalCursorLockMode = Cursor.lockState;
+            _originalCursorVisible = Cursor.visible;
         }
         
         /// <summary>
@@ -66,9 +101,105 @@ namespace PlugInputPack
                 inputReader.DebugHandleColor
             );
             
+            _deviceManager.Initialize(
+                inputReader.EnableDeviceManagement,
+                inputReader.StrictDeviceIsolation,
+                inputReader.DeviceSwitchCooldown,
+                inputReader.AllowedDevices
+            );
+            
+            SetupDeviceEvents();
             RegisterAllInputs(actionAsset);
             
             OnInputSystemInitialized?.Invoke();
+        }
+        
+        /// <summary>
+        /// Configura eventos de dispositivos
+        /// </summary>
+        private void SetupDeviceEvents()
+        {
+            PlugInputDeviceManager.OnDeviceChanged += HandleDeviceChanged;
+            PlugInputDeviceManager.OnDeviceConnected += HandleDeviceConnected;
+            PlugInputDeviceManager.OnDeviceDisconnected += HandleDeviceDisconnected;
+            PlugInputDeviceManager.OnDeviceTypeFiltered += HandleDeviceFiltered;
+        }
+        
+        /// <summary>
+        /// Manipula mudança de dispositivo
+        /// </summary>
+        private void HandleDeviceChanged(PlugInputDeviceManager.DeviceType previous, PlugInputDeviceManager.DeviceType current)
+        {
+            if (inputReader.EnableDebug)
+            {
+                Debug.Log($"PlugInputPack: Dispositivo mudou de {previous} para {current}");
+            }
+            
+            UpdateCursorBehavior(current);
+            OnDeviceChanged?.Invoke(previous, current);
+        }
+        
+        /// <summary>
+        /// Atualiza comportamento do cursor baseado no dispositivo
+        /// </summary>
+        private void UpdateCursorBehavior(PlugInputDeviceManager.DeviceType deviceType)
+        {
+            if (deviceType == PlugInputDeviceManager.DeviceType.Gamepad)
+            {
+                if (inputReader.HideCursorOnGamepad)
+                {
+                    Cursor.visible = false;
+                }
+                
+                if (inputReader.LockCursorOnGamepad)
+                {
+                    Cursor.lockState = inputReader.GamepadCursorLockMode;
+                }
+            }
+            else
+            {
+                Cursor.visible = _originalCursorVisible;
+                Cursor.lockState = _originalCursorLockMode;
+            }
+        }
+        
+        /// <summary>
+        /// Manipula conexão de dispositivo
+        /// </summary>
+        private void HandleDeviceConnected(InputDevice device)
+        {
+            if (inputReader.EnableDebug)
+            {
+                Debug.Log($"PlugInputPack: Dispositivo conectado: {device.displayName}");
+            }
+            
+            OnDeviceConnected?.Invoke(device);
+        }
+        
+        /// <summary>
+        /// Manipula desconexão de dispositivo
+        /// </summary>
+        private void HandleDeviceDisconnected(InputDevice device)
+        {
+            if (inputReader.EnableDebug)
+            {
+                Debug.Log($"PlugInputPack: Dispositivo desconectado: {device.displayName}");
+            }
+            
+            OnDeviceDisconnected?.Invoke(device);
+        }
+        
+        /// <summary>
+        /// Manipula dispositivo filtrado
+        /// </summary>
+        private void HandleDeviceFiltered(PlugInputDeviceManager.DeviceType deviceType)
+        {
+            if (inputReader.EnableDebug)
+            {
+                Debug.Log($"PlugInputPack: Dispositivo {deviceType} foi filtrado (não permitido)");
+            }
+            
+            OnDeviceFiltered?.Invoke(deviceType);
         }
         
         /// <summary>
@@ -105,6 +236,11 @@ namespace PlugInputPack
         /// </summary>
         private void OnActionPerformed(InputAction.CallbackContext context)
         {
+            _deviceManager.ProcessInputActivity(context);
+            
+            if (!_deviceManager.ShouldProcessInput(context, context.action.name))
+                return;
+                
             string actionName = context.action.name;
             var state = _cache.GetState(actionName);
             
@@ -131,6 +267,11 @@ namespace PlugInputPack
         /// </summary>
         private void OnActionCanceled(InputAction.CallbackContext context)
         {
+            _deviceManager.ProcessInputActivity(context);
+            
+            if (!_deviceManager.ShouldProcessInput(context, context.action.name))
+                return;
+                
             string actionName = context.action.name;
             var state = _cache.GetState(actionName);
             
@@ -197,6 +338,14 @@ namespace PlugInputPack
                 return Vector3.Distance(cv3, lv3) < 0.001f;
             
             return current.Equals(last);
+        }
+        
+        /// <summary>
+        /// Força mudança para um tipo de dispositivo específico
+        /// </summary>
+        public bool ForceDeviceType(PlugInputDeviceManager.DeviceType deviceType)
+        {
+            return _deviceManager?.ForceDeviceType(deviceType) ?? false;
         }
         
         /// <summary>
@@ -273,6 +422,13 @@ namespace PlugInputPack
         /// </summary>
         private void OnDestroy()
         {
+            RestoreCursorState();
+            
+            PlugInputDeviceManager.OnDeviceChanged -= HandleDeviceChanged;
+            PlugInputDeviceManager.OnDeviceConnected -= HandleDeviceConnected;
+            PlugInputDeviceManager.OnDeviceDisconnected -= HandleDeviceDisconnected;
+            PlugInputDeviceManager.OnDeviceTypeFiltered -= HandleDeviceFiltered;
+            
             OnInputSystemDestroyed?.Invoke();
             OnInputPerformed = null;
             OnInputCanceled = null;
@@ -283,10 +439,15 @@ namespace PlugInputPack
             OnInputStateChanged = null;
             OnInputSystemInitialized = null;
             OnInputSystemDestroyed = null;
+            OnDeviceChanged = null;
+            OnDeviceConnected = null;
+            OnDeviceDisconnected = null;
+            OnDeviceFiltered = null;
             
             _lastValues?.Clear();
             _cache?.Dispose();
             _debugger?.Clear();
+            _deviceManager?.Dispose();
             
             if (inputReader?.InputActionAsset != null)
             {
@@ -299,6 +460,15 @@ namespace PlugInputPack
                     }
                 }
             }
+        }
+        
+        /// <summary>
+        /// Restaura estado original do cursor
+        /// </summary>
+        private void RestoreCursorState()
+        {
+            Cursor.lockState = _originalCursorLockMode;
+            Cursor.visible = _originalCursorVisible;
         }
     }
 }
