@@ -227,18 +227,51 @@ namespace PlugInputPack
                 case Touchscreen:
                     return DeviceType.Touch;
                 case Joystick:
+                    // Trata controles genéricos como Gamepad se tiverem botões suficientes
+                    if (HasGamepadLikeControls(device))
+                        return DeviceType.Gamepad;
                     return DeviceType.Joystick;
                 case TrackedDevice:
                     return DeviceType.XRController;
                 default:
+                    // Verifica se é algum tipo de controller
                     if (device.description.deviceClass.Contains("XR") || 
-                        device.description.deviceClass.Contains("VR") ||
-                        device.displayName.ToLower().Contains("controller"))
+                        device.description.deviceClass.Contains("VR"))
                     {
                         return DeviceType.XRController;
                     }
+                    
+                    // Se tem características de gamepad, trata como tal
+                    if (HasGamepadLikeControls(device))
+                    {
+                        return DeviceType.Gamepad;
+                    }
+                    
                     return DeviceType.Unknown;
             }
+        }
+        
+        /// <summary>
+        /// Verifica se o dispositivo tem controles similares a um gamepad
+        /// </summary>
+        private bool HasGamepadLikeControls(InputDevice device)
+        {
+            // Verifica se tem pelo menos 4 botões e 2 sticks/eixos
+            int buttonCount = 0;
+            int axisCount = 0;
+            
+            foreach (var control in device.allControls)
+            {
+                if (control is UnityEngine.InputSystem.Controls.ButtonControl)
+                    buttonCount++;
+                else if (control is UnityEngine.InputSystem.Controls.AxisControl)
+                    axisCount++;
+                else if (control is UnityEngine.InputSystem.Controls.StickControl)
+                    axisCount += 2; // Stick conta como 2 eixos
+            }
+            
+            // Se tem pelo menos 4 botões e 4 eixos, provavelmente é um gamepad
+            return buttonCount >= 4 && axisCount >= 4;
         }
         
         /// <summary>
@@ -286,17 +319,35 @@ namespace PlugInputPack
                 }
             }
             
+            // Verifica joysticks genéricos
+            foreach (var joystick in Joystick.all)
+            {
+                if (joystick != null && joystick.stick != null)
+                {
+                    Vector2 stickValue = joystick.stick.ReadValue();
+                    if (stickValue.magnitude > _inputActivityThreshold)
+                    {
+                        _lastInputActivity["joystick"] = currentTime;
+                        return HasGamepadLikeControls(joystick) ? DeviceType.Gamepad : DeviceType.Joystick;
+                    }
+                }
+            }
+            
             // Se não há atividade nova, usa o último dispositivo ativo
             float mouseLastActivity = _lastInputActivity.ContainsKey("mouse") ? _lastInputActivity["mouse"] : 0f;
             float gamepadLastActivity = _lastInputActivity.ContainsKey("gamepad") ? _lastInputActivity["gamepad"] : 0f;
+            float joystickLastActivity = _lastInputActivity.ContainsKey("joystick") ? _lastInputActivity["joystick"] : 0f;
             
-            if (mouseLastActivity > gamepadLastActivity && (currentTime - mouseLastActivity) < 1f)
+            float mostRecentTime = Mathf.Max(mouseLastActivity, gamepadLastActivity, joystickLastActivity);
+            
+            if (mostRecentTime > 0 && (currentTime - mostRecentTime) < 1f)
             {
-                return DeviceType.Mouse;
-            }
-            else if (gamepadLastActivity > mouseLastActivity && (currentTime - gamepadLastActivity) < 1f)
-            {
-                return DeviceType.Gamepad;
+                if (mostRecentTime == mouseLastActivity)
+                    return DeviceType.Mouse;
+                else if (mostRecentTime == gamepadLastActivity)
+                    return DeviceType.Gamepad;
+                else if (mostRecentTime == joystickLastActivity)
+                    return DeviceType.Gamepad; // Trata joystick como gamepad
             }
             
             return _currentDeviceType;
@@ -359,6 +410,16 @@ namespace PlugInputPack
                 {
                     SwitchToDevice(detectedType, devices[0]);
                 }
+                else if (detectedType == DeviceType.Gamepad && device != null)
+                {
+                    // Se detectou como gamepad mas não tem na lista, adiciona
+                    if (!_devicesByType.ContainsKey(DeviceType.Gamepad))
+                    {
+                        _devicesByType[DeviceType.Gamepad] = new List<InputDevice>();
+                    }
+                    _devicesByType[DeviceType.Gamepad].Add(device);
+                    SwitchToDevice(detectedType, device);
+                }
             }
         }
         
@@ -384,6 +445,13 @@ namespace PlugInputPack
             
             // Para ações compostas como Look, sempre processa mas filtra no ProcessInputActivity
             if (actionName.ToLower().Contains("look") || actionName.ToLower().Contains("camera"))
+            {
+                return true;
+            }
+            
+            // Permite tanto Gamepad quanto Joystick se o atual for um deles
+            if ((_currentDeviceType == DeviceType.Gamepad || _currentDeviceType == DeviceType.Joystick) &&
+                (inputDeviceType == DeviceType.Gamepad || inputDeviceType == DeviceType.Joystick))
             {
                 return true;
             }
@@ -442,7 +510,8 @@ namespace PlugInputPack
             info += $"Isolamento: {(_strictIsolation ? "Ativo" : "Inativo")}\n";
             info += $"Dispositivos Permitidos: {_allowedDevices.Count}\n";
             info += $"Total de Tipos: {_devicesByType.Count}\n";
-            info += $"Threshold de Atividade: {_inputActivityThreshold:F3}";
+            info += $"Threshold de Atividade: {_inputActivityThreshold:F3}\n";
+            info += $"Cooldown: {_deviceSwitchCooldown:F2}s";
             return info;
         }
         
