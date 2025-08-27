@@ -1,3 +1,10 @@
+## [2.0.3](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.2...v2.0.3) (2025-08-27)
+
+
+### Bug Fixes
+
+* Add device management to input system ([a934927](https://github.com/Natteens/com.natteens.pluginputpack/commit/a9349279b0ce93df0804105e7c893418d80834c3))
+
 ## [2.0.2](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.1...v2.0.2) (2025-06-06)
 
 
