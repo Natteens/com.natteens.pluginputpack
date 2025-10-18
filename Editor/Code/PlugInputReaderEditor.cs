@@ -19,9 +19,8 @@ namespace PlugInputPack.Editor
         private SerializedProperty _deviceSwitchCooldownProperty;
         private SerializedProperty _allowedDevicesProperty;
         
-        private SerializedProperty _hideCursorOnGamepadProperty;
-        private SerializedProperty _lockCursorOnGamepadProperty;
-        private SerializedProperty _gamepadCursorLockModeProperty;
+        private SerializedProperty _lockCursorOnStartProperty;
+        private SerializedProperty _autoLockCursorOnGamepadProperty;
         
         private bool _showAdvancedSettings = false;
         private bool _showInputActions;
@@ -45,9 +44,8 @@ namespace PlugInputPack.Editor
             _deviceSwitchCooldownProperty = serializedObject.FindProperty("deviceSwitchCooldown");
             _allowedDevicesProperty = serializedObject.FindProperty("allowedDevices");
             
-            _hideCursorOnGamepadProperty = serializedObject.FindProperty("hideCursorOnGamepad");
-            _lockCursorOnGamepadProperty = serializedObject.FindProperty("lockCursorOnGamepad");
-            _gamepadCursorLockModeProperty = serializedObject.FindProperty("gamepadCursorLockMode");
+            _lockCursorOnStartProperty = serializedObject.FindProperty("lockCursorOnStart");
+            _autoLockCursorOnGamepadProperty = serializedObject.FindProperty("autoLockCursorOnGamepad");
         }
         
         private void InitializeStyles()
@@ -190,23 +188,16 @@ namespace PlugInputPack.Editor
             
             if (_showCursorSettings)
             {
-                EditorGUILayout.PropertyField(_hideCursorOnGamepadProperty, 
-                    new GUIContent("Ocultar Cursor com Gamepad", "Oculta o cursor quando gamepad é o dispositivo ativo"));
-                
-                EditorGUILayout.PropertyField(_lockCursorOnGamepadProperty, 
-                    new GUIContent("Bloquear Cursor com Gamepad", "Aplica modo de bloqueio do cursor com gamepad"));
-                
-                if (_lockCursorOnGamepadProperty.boolValue)
+                if (_lockCursorOnStartProperty != null)
                 {
-                    EditorGUI.indentLevel++;
-                    EditorGUILayout.PropertyField(_gamepadCursorLockModeProperty, 
-                        new GUIContent("Modo de Bloqueio", "Modo de bloqueio aplicado quando gamepad está ativo"));
-                    EditorGUI.indentLevel--;
+                    EditorGUILayout.PropertyField(_lockCursorOnStartProperty, 
+                        new GUIContent("Trancar Cursor ao Iniciar", "Inicia o jogo com cursor oculto e preso"));
                 }
                 
-                if (_hideCursorOnGamepadProperty.boolValue || _lockCursorOnGamepadProperty.boolValue)
+                if (_autoLockCursorOnGamepadProperty != null)
                 {
-                    EditorGUILayout.HelpBox("As configurações de cursor serão aplicadas automaticamente quando o gamepad for detectado.", MessageType.Info);
+                    EditorGUILayout.PropertyField(_autoLockCursorOnGamepadProperty, 
+                        new GUIContent("Trancar ao Usar Gamepad", "Automaticamente trava cursor ao conectar gamepad"));
                 }
             }
             

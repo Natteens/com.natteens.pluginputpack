@@ -42,15 +42,12 @@ namespace PlugInputPack
         [SerializeField, Tooltip("Dispositivos permitidos (vazio = todos)")]
         private PlugInputDeviceManager.DeviceType[] allowedDevices = new PlugInputDeviceManager.DeviceType[0];
         
-        [Header("Configurações do Cursor")]
-        [SerializeField, Tooltip("Oculta cursor quando usando gamepad")]
-        private bool hideCursorOnGamepad = true;
+        [Header("Configurações de Cursor")]
+        [SerializeField, Tooltip("Cursor oculto e preso ao iniciar")]
+        private bool lockCursorOnStart = false;
         
-        [SerializeField, Tooltip("Bloqueia cursor quando usando gamepad")]
-        private bool lockCursorOnGamepad = false;
-        
-        [SerializeField, Tooltip("Modo do cursor quando gamepad está ativo")]
-        private CursorLockMode gamepadCursorLockMode = CursorLockMode.None;
+        [SerializeField, Tooltip("Alterar cursor automaticamente quando mudar para gamepad")]
+        private bool autoLockCursorOnGamepad = true;
         
         /// <summary>
         /// Asset de ações do Unity Input System
@@ -98,19 +95,14 @@ namespace PlugInputPack
         public PlugInputDeviceManager.DeviceType[] AllowedDevices => allowedDevices;
         
         /// <summary>
-        /// Define se deve ocultar cursor com gamepad
+        /// Define se o cursor começa oculto e preso
         /// </summary>
-        public bool HideCursorOnGamepad => hideCursorOnGamepad;
+        public bool LockCursorOnStart => lockCursorOnStart;
         
         /// <summary>
-        /// Define se deve bloquear cursor com gamepad
+        /// Define se deve trancar cursor ao detectar gamepad
         /// </summary>
-        public bool LockCursorOnGamepad => lockCursorOnGamepad;
-        
-        /// <summary>
-        /// Modo do cursor quando gamepad está ativo
-        /// </summary>
-        public CursorLockMode GamepadCursorLockMode => gamepadCursorLockMode;
+        public bool AutoLockCursorOnGamepad => autoLockCursorOnGamepad;
         
         /// <summary>
         /// Valida a configuração do Input Reader

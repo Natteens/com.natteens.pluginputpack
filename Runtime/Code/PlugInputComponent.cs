@@ -18,6 +18,11 @@ namespace PlugInputPack
         private PlugInputVisualizer _visualizer;
         private PlugInputDeviceManager _deviceManager;
         
+        private bool _cursorLocked = false;
+        private CursorLockMode _originalCursorLockMode;
+        private bool _originalCursorVisible;
+        private bool _hasManualOverride = false;
+        
         public static event Action<string, object> OnInputPerformed;
         public static event Action<string> OnInputCanceled;
         public static event Action<string> OnInputPressed;   
@@ -34,8 +39,6 @@ namespace PlugInputPack
         public static event Action<PlugInputDeviceManager.DeviceType> OnDeviceFiltered;
         
         private Dictionary<string, object> _lastValues = new Dictionary<string, object>();
-        private CursorLockMode _originalCursorLockMode;
-        private bool _originalCursorVisible;
         
         /// <summary>
         /// Gerenciador de dispositivos
@@ -51,6 +54,11 @@ namespace PlugInputPack
         /// Nome do dispositivo atual
         /// </summary>
         public string CurrentDeviceName => _deviceManager?.CurrentDeviceName ?? "Nenhum";
+        
+        /// <summary>
+        /// Verifica se o cursor está travado e oculto
+        /// </summary>
+        public bool IsCursorLocked => _cursorLocked;
         
         private void Awake()
         {
@@ -111,6 +119,16 @@ namespace PlugInputPack
             SetupDeviceEvents();
             RegisterAllInputs(actionAsset);
             
+            // Aplica o estado inicial do cursor
+            if (inputReader.LockCursorOnStart)
+            {
+                LockCursor();
+            }
+            else
+            {
+                UnlockCursor();
+            }
+            
             OnInputSystemInitialized?.Invoke();
         }
         
@@ -135,31 +153,72 @@ namespace PlugInputPack
                 Debug.Log($"PlugInputPack: Dispositivo mudou de {previous} para {current}");
             }
             
-            UpdateCursorBehavior(current);
+            // Aplica lock de cursor automaticamente ao usar gamepad
+            if (!_hasManualOverride && inputReader.AutoLockCursorOnGamepad)
+            {
+                if (current == PlugInputDeviceManager.DeviceType.Gamepad)
+                {
+                    LockCursor();
+                }
+                else
+                {
+                    UnlockCursor();
+                }
+            }
+            
             OnDeviceChanged?.Invoke(previous, current);
         }
         
         /// <summary>
-        /// Atualiza comportamento do cursor baseado no dispositivo
+        /// Trava o cursor (oculto e preso)
         /// </summary>
-        private void UpdateCursorBehavior(PlugInputDeviceManager.DeviceType deviceType)
+        public void LockCursor()
         {
-            if (deviceType == PlugInputDeviceManager.DeviceType.Gamepad)
+            _cursorLocked = true;
+            _hasManualOverride = true;
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
+        }
+        
+        /// <summary>
+        /// Libera o cursor (visível e livre)
+        /// </summary>
+        public void UnlockCursor()
+        {
+            _cursorLocked = false;
+            _hasManualOverride = true;
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+        }
+        
+        /// <summary>
+        /// Retorna ao comportamento automático baseado nas configurações
+        /// </summary>
+        public void ResetCursorBehavior()
+        {
+            _hasManualOverride = false;
+            
+            if (inputReader.AutoLockCursorOnGamepad)
             {
-                if (inputReader.HideCursorOnGamepad)
+                if (CurrentDeviceType == PlugInputDeviceManager.DeviceType.Gamepad)
                 {
-                    Cursor.visible = false;
+                    LockCursor();
                 }
-                
-                if (inputReader.LockCursorOnGamepad)
+                else
                 {
-                    Cursor.lockState = inputReader.GamepadCursorLockMode;
+                    UnlockCursor();
                 }
             }
             else
             {
-                Cursor.visible = _originalCursorVisible;
-                Cursor.lockState = _originalCursorLockMode;
+                if (inputReader.LockCursorOnStart)
+                {
+                    LockCursor();
+                }
+                else
+                {
+                    UnlockCursor();
+                }
             }
         }
         
