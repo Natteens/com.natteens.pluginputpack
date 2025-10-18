@@ -1,3 +1,10 @@
+## [2.0.4](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.3...v2.0.4) (2025-10-18)
+
+
+### Bug Fixes
+
+* Refactor cursor lock settings for gamepad support ([ee82b7e](https://github.com/Natteens/com.natteens.pluginputpack/commit/ee82b7eacd8da2360ad158920d472f9f9a775d23))
+
 ## [2.0.3](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.2...v2.0.3) (2025-08-27)
 
 
