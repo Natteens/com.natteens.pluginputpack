@@ -1,3 +1,10 @@
+## [2.0.5](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.4...v2.0.5) (2025-10-23)
+
+
+### Bug Fixes
+
+* Extend cursor lock to joystick and XR controllers ([27951e1](https://github.com/Natteens/com.natteens.pluginputpack/commit/27951e1413083bfe032135c38960b816d08ff6a4))
+
 ## [2.0.4](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.3...v2.0.4) (2025-10-18)
 
 
