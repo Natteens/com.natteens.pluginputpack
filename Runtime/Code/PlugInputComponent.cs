@@ -156,7 +156,9 @@ namespace PlugInputPack
             // Aplica lock de cursor automaticamente ao usar gamepad
             if (!_hasManualOverride && inputReader.AutoLockCursorOnGamepad)
             {
-                if (current == PlugInputDeviceManager.DeviceType.Gamepad)
+                if (current == PlugInputDeviceManager.DeviceType.Gamepad ||
+                    current == PlugInputDeviceManager.DeviceType.Joystick ||
+                    current == PlugInputDeviceManager.DeviceType.XRController)
                 {
                     LockCursor();
                 }
@@ -200,7 +202,9 @@ namespace PlugInputPack
             
             if (inputReader.AutoLockCursorOnGamepad)
             {
-                if (CurrentDeviceType == PlugInputDeviceManager.DeviceType.Gamepad)
+                if (CurrentDeviceType == PlugInputDeviceManager.DeviceType.Gamepad ||
+                    CurrentDeviceType == PlugInputDeviceManager.DeviceType.Joystick ||
+                    CurrentDeviceType == PlugInputDeviceManager.DeviceType.XRController)
                 {
                     LockCursor();
                 }
