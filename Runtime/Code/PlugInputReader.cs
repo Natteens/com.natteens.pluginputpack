@@ -6,7 +6,7 @@ namespace PlugInputPack
     /// <summary>
     /// ScriptableObject que armazena a configuração do sistema de input.
     /// </summary>
-    [CreateAssetMenu(fileName = "New PlugInputReader", menuName = "Plug Input Pack/Input Reader")]
+    [CreateAssetMenu(fileName = "New PlugInputReader", menuName = "Scriptable Objects/Plug Input Pack/Input Reader")]
     public class PlugInputReader : ScriptableObject
     {
         [Header("Configuração Principal")]
