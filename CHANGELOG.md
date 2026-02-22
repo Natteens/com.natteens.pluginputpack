@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.5...v2.1.0) (2026-02-22)
+
+
+### Features
+
+* Use InputValue struct for zero-allocation input ([49e8f80](https://github.com/Natteens/com.natteens.pluginputpack/commit/49e8f80f34b95fde3b5875324e391761832bacdb))
+
 ## [2.0.5](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.4...v2.0.5) (2025-10-23)
 
 
