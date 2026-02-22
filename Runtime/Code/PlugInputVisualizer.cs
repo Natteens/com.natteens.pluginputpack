@@ -382,7 +382,7 @@ namespace PlugInputPack
                     break;
                     
                 default:
-                    result = state.RawValue?.ToString() ?? "null";
+                    result = state.GetDebugString();
                     break;
             }
             

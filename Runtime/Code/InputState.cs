@@ -1,72 +1,56 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using System;
 
 namespace PlugInputPack
 {
     /// <summary>
-    /// Armazena o estado atual de um input específico.
+    /// Stores the current state of a single input action.
+    /// Uses InputValue struct internally — no boxing, no heap allocation per frame.
     /// </summary>
     public class InputState
     {
         private readonly InputAction _action;
         private readonly string _inputType;
-        private object _currentValue;
-        private object _previousValue;
+
+        private InputValue _currentValue;
+        private InputValue _previousValue;
+
         private bool _pressedThisFrame;
         private bool _releasedThisFrame;
         private bool _pressedThisFrameBuffer;
         private bool _releasedThisFrameBuffer;
-        
-        /// <summary>
-        /// Cria um novo estado de input
-        /// </summary>
+
         public InputState(InputAction action)
         {
             _action = action;
             _inputType = action.expectedControlType;
+            _currentValue = PlugInputProcessor.GetDefaultValue(_inputType);
+            _previousValue = _currentValue;
+
             _action.performed += OnActionPerformed;
             _action.canceled += OnActionCanceled;
-            _currentValue = GetDefaultValue();
-            _previousValue = _currentValue;
         }
-        
-        /// <summary>
-        /// Chamado quando uma ação é executada
-        /// </summary>
+
         private void OnActionPerformed(InputAction.CallbackContext context)
         {
             _previousValue = _currentValue;
             _currentValue = PlugInputProcessor.ReadValue(context, _inputType);
-            if (IsPressed && !WasPressed)
-            {
+
+            if (_currentValue.IsActive() && !_previousValue.IsActive())
                 _pressedThisFrameBuffer = true;
-            }
         }
-        
-        /// <summary>
-        /// Chamado quando uma ação é cancelada
-        /// </summary>
+
         private void OnActionCanceled(InputAction.CallbackContext context)
         {
             _previousValue = _currentValue;
-            _currentValue = GetDefaultValue();
-            if (!IsPressed && WasPressed)
-            {
+            _currentValue = PlugInputProcessor.GetDefaultValue(_inputType);
+
+            if (!_currentValue.IsActive() && _previousValue.IsActive())
                 _releasedThisFrameBuffer = true;
-            }
         }
-        
+
         /// <summary>
-        /// Obtém o valor padrão para o tipo de input
-        /// </summary>
-        private object GetDefaultValue()
-        {
-            return PlugInputProcessor.GetDefaultValue(_inputType);
-        }
-        
-        /// <summary>
-        /// Atualiza o estado do frame
+        /// Flushes the per-frame pressed/released buffers. Called from LateUpdate.
         /// </summary>
         public void Update()
         {
@@ -75,79 +59,36 @@ namespace PlugInputPack
             _pressedThisFrameBuffer = false;
             _releasedThisFrameBuffer = false;
         }
-        
-        /// <summary>
-        /// Remove os callbacks ao destruir
-        /// </summary>
+
         public void Dispose()
         {
             _action.performed -= OnActionPerformed;
-            _action.canceled -= OnActionCanceled;
+            _action.canceled  -= OnActionCanceled;
         }
-        
-        /// <summary>
-        /// Nome da ação
-        /// </summary>
-        public string Name => _action.name;
-        
-        /// <summary>
-        /// O tipo de input esperado para esta ação
-        /// </summary>
+
+        // --- Identity ---
+        public string Name      => _action.name;
         public string InputType => _inputType;
-        
-        /// <summary>
-        /// Verifica se o input está pressionado
-        /// </summary>
-        public bool IsPressed => PlugInputProcessor.IsValueActive(_currentValue);
-        
-        /// <summary>
-        /// Verifica se o input estava pressionado no frame anterior
-        /// </summary>
-        private bool WasPressed => PlugInputProcessor.IsValueActive(_previousValue);
-        
-        /// <summary>
-        /// Verifica se o input foi pressionado neste frame
-        /// </summary>
+
+        // --- State ---
+        public bool IsPressed        => _currentValue.IsActive();
         public bool PressedThisFrame => _pressedThisFrame;
-        
+        public bool ReleasedThisFrame=> _releasedThisFrame;
+
+        // --- Typed accessors (no alloc) ---
+        public bool    AsBool    => _currentValue.AsBool();
+        public float   AsFloat   => _currentValue.AsFloat();
+        public int     AsInt     => _currentValue.AsInt();
+        public Vector2 AsVector2 => _currentValue.AsVector2();
+        public Vector3 AsVector3 => _currentValue.AsVector3();
+
+        // --- Raw access for debug/events ---
+        public InputValue CurrentValue  => _currentValue;
+        public InputValue PreviousValue => _previousValue;
+
         /// <summary>
-        /// Verifica se o input foi liberado neste frame
+        /// Returns a formatted string for the debug overlay. Allocates — only call from debug paths.
         /// </summary>
-        public bool ReleasedThisFrame => _releasedThisFrame;
-        
-        /// <summary>
-        /// Obtém o valor como Vector2
-        /// </summary>
-        public Vector2 AsVector2 => PlugInputProcessor.ConvertToVector2(_currentValue);
-        
-        /// <summary>
-        /// Obtém o valor como Vector3
-        /// </summary>
-        public Vector3 AsVector3 => PlugInputProcessor.ConvertToVector3(_currentValue);
-        
-        /// <summary>
-        /// Obtém o valor como float
-        /// </summary>
-        public float AsFloat => PlugInputProcessor.ConvertToFloat(_currentValue);
-        
-        /// <summary>
-        /// Obtém o valor como bool
-        /// </summary>
-        public bool AsBool => PlugInputProcessor.ConvertToBool(_currentValue);
-        
-        /// <summary>
-        /// Obtém o valor como int
-        /// </summary>
-        public int AsInt => PlugInputProcessor.ConvertToInt(_currentValue);
-        
-        /// <summary>
-        /// Valor atual sem conversão
-        /// </summary>
-        public object RawValue => _currentValue;
-        
-        /// <summary>
-        /// Valor anterior sem conversão
-        /// </summary>
-        public object PreviousValue => _previousValue;
+        public string GetDebugString() => _currentValue.ToString();
     }
 }

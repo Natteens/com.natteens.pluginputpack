@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.InputSystem;
-using PlugInputPack;
 
 namespace PlugInputPack.Editor
 {
@@ -22,7 +21,6 @@ namespace PlugInputPack.Editor
         private SerializedProperty _lockCursorOnStartProperty;
         private SerializedProperty _autoLockCursorOnGamepadProperty;
         
-        private bool _showAdvancedSettings = false;
         private bool _showInputActions;
         private bool _showDeviceSettings = true;
         private bool _showCursorSettings = true;
@@ -283,7 +281,7 @@ namespace PlugInputPack.Editor
             
             var inputReader = target as PlugInputReader;
             
-            if (inputReader.IsValid())
+            if (inputReader != null && inputReader.IsValid())
             {
                 EditorGUILayout.HelpBox($"Configuração válida!\n{inputReader.GetDebugInfo()}", MessageType.Info);
             }
@@ -298,7 +296,7 @@ namespace PlugInputPack.Editor
             
             if (GUILayout.Button("Validar Configuração"))
             {
-                bool isValid = inputReader.IsValid();
+                bool isValid = inputReader != null && inputReader.IsValid();
                 EditorUtility.DisplayDialog(
                     "Validação do Input Reader",
                     isValid ? $"Configuração válida!\n\n{inputReader.GetDebugInfo()}" : "Configuração inválida!",
@@ -308,7 +306,7 @@ namespace PlugInputPack.Editor
             
             if (GUILayout.Button("Ping Asset"))
             {
-                if (inputReader.InputActionAsset != null)
+                if (inputReader != null && inputReader.InputActionAsset != null)
                 {
                     EditorGUIUtility.PingObject(inputReader.InputActionAsset);
                 }
