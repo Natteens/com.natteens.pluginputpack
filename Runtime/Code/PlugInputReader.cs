@@ -3,157 +3,99 @@ using UnityEngine.InputSystem;
 
 namespace PlugInputPack
 {
-    /// <summary>
-    /// ScriptableObject que armazena a configuração do sistema de input.
-    /// </summary>
-    [CreateAssetMenu(fileName = "New PlugInputReader", menuName = "Scriptable Objects/Plug Input Pack/Input Reader")]
+    [CreateAssetMenu(fileName = "New PlugInputReader", menuName = "Plug Input Pack/Input Reader")]
     public class PlugInputReader : ScriptableObject
     {
-        [Header("Configuração Principal")]
-        [SerializeField, Tooltip("Asset de ações do Unity Input System")]
+        [Header("Input")]
+        [SerializeField, Tooltip("The Unity Input System asset that defines all input actions.")]
         private InputActionAsset inputActionAsset;
-        
-        [Header("Configurações de Debug")]
-        [SerializeField, Tooltip("Habilita logs de debug no console")]
+
+        [Header("Debug")]
+        [SerializeField, Tooltip("Print input activity to the console.")]
         private bool enableDebug;
-        
-        [SerializeField, Tooltip("Habilita visualizadores na tela durante debug")]
+
+        [SerializeField, Tooltip("Show a real-time input overlay on screen.")]
         private bool enableVisualDebug;
-        
-        [Header("Configurações Visuais")]
-        [SerializeField, Tooltip("Tamanho dos elementos visuais de debug (1-300)")]
-        [Range(1f, 300f)]
+
+        [SerializeField, Tooltip("Scale of the visual debug overlay elements."), Range(1f, 300f)]
         private float debugHandleSize = 100f;
-        
-        [SerializeField, Tooltip("Cor dos elementos de visualização")]
+
+        [SerializeField, Tooltip("Color used for the visual debug overlay.")]
         private Color debugHandleColor = Color.yellow;
-        
-        [Header("Gerenciamento de Dispositivos")]
-        [SerializeField, Tooltip("Habilita detecção automática de dispositivos")]
+
+        [Header("Device Management")]
+        [SerializeField, Tooltip("Detect and track which input device the player is using.")]
         private bool enableDeviceManagement = true;
-        
-        [SerializeField, Tooltip("Isola inputs por dispositivo atual")]
-        private bool strictDeviceIsolation = false;
-        
-        [SerializeField, Tooltip("Tempo de cooldown entre trocas de dispositivo (segundos)")]
-        [Range(0f, 2f)]
+
+        [SerializeField, Tooltip("When enabled, only inputs from the currently active device are processed. Useful for preventing ghost inputs when switching between keyboard and gamepad.")]
+        private bool strictDeviceIsolation;
+
+        [SerializeField, Tooltip("Minimum time in seconds before the active device can change again. Prevents accidental flicker when two devices are used simultaneously."), Range(0f, 2f)]
         private float deviceSwitchCooldown = 0.1f;
-        
-        [SerializeField, Tooltip("Dispositivos permitidos (vazio = todos)")]
+
+        [SerializeField, Tooltip("Restrict input to specific device types. Leave empty to allow all devices.")]
         private PlugInputDeviceManager.DeviceType[] allowedDevices = new PlugInputDeviceManager.DeviceType[0];
-        
-        [Header("Configurações de Cursor")]
-        [SerializeField, Tooltip("Cursor oculto e preso ao iniciar")]
-        private bool lockCursorOnStart = false;
-        
-        [SerializeField, Tooltip("Alterar cursor automaticamente quando mudar para gamepad")]
+
+        [Header("Cursor")]
+        [SerializeField, Tooltip("Lock and hide the cursor when the scene starts.")]
+        private bool lockCursorOnStart;
+
+        [SerializeField, Tooltip("Automatically lock the cursor when a gamepad, joystick, or XR controller is detected, and unlock it when switching back to keyboard/mouse.")]
         private bool autoLockCursorOnGamepad = true;
-        
-        /// <summary>
-        /// Asset de ações do Unity Input System
-        /// </summary>
-        public InputActionAsset InputActionAsset => inputActionAsset;
-        
-        /// <summary>
-        /// Define se o debug está ativado
-        /// </summary>
-        public bool EnableDebug => enableDebug;
-        
-        /// <summary>
-        /// Define se a visualização na tela está ativada
-        /// </summary>
-        public bool EnableVisualDebug => enableVisualDebug;
-        
-        /// <summary>
-        /// Tamanho dos elementos visuais
-        /// </summary>
-        public float DebugHandleSize => debugHandleSize;
-        
-        /// <summary>
-        /// Cor dos elementos visuais
-        /// </summary>
-        public Color DebugHandleColor => debugHandleColor;
-        
-        /// <summary>
-        /// Define se o gerenciamento de dispositivos está ativo
-        /// </summary>
-        public bool EnableDeviceManagement => enableDeviceManagement;
-        
-        /// <summary>
-        /// Define se o isolamento estrito está ativo
-        /// </summary>
-        public bool StrictDeviceIsolation => strictDeviceIsolation;
-        
-        /// <summary>
-        /// Tempo de cooldown entre trocas de dispositivo
-        /// </summary>
-        public float DeviceSwitchCooldown => deviceSwitchCooldown;
-        
-        /// <summary>
-        /// Dispositivos permitidos
-        /// </summary>
+
+        // --- Accessors ---
+
+        public InputActionAsset InputActionAsset       => inputActionAsset;
+        public bool  EnableDebug                       => enableDebug;
+        public bool  EnableVisualDebug                 => enableVisualDebug;
+        public float DebugHandleSize                   => debugHandleSize;
+        public Color DebugHandleColor                  => debugHandleColor;
+        public bool  EnableDeviceManagement            => enableDeviceManagement;
+        public bool  StrictDeviceIsolation             => strictDeviceIsolation;
+        public float DeviceSwitchCooldown              => deviceSwitchCooldown;
         public PlugInputDeviceManager.DeviceType[] AllowedDevices => allowedDevices;
-        
-        /// <summary>
-        /// Define se o cursor começa oculto e preso
-        /// </summary>
-        public bool LockCursorOnStart => lockCursorOnStart;
-        
-        /// <summary>
-        /// Define se deve trancar cursor ao detectar gamepad
-        /// </summary>
-        public bool AutoLockCursorOnGamepad => autoLockCursorOnGamepad;
-        
-        /// <summary>
-        /// Valida a configuração do Input Reader
-        /// </summary>
+        public bool  LockCursorOnStart                 => lockCursorOnStart;
+        public bool  AutoLockCursorOnGamepad           => autoLockCursorOnGamepad;
+
+        // --- Validation ---
+
         public bool IsValid()
         {
             if (inputActionAsset == null)
             {
-                Debug.LogWarning($"PlugInputReader '{name}': InputActionAsset não está configurado!");
+                Debug.LogWarning($"[PlugInputReader] '{name}': Input Action Asset is not assigned.");
                 return false;
             }
-            
             if (inputActionAsset.actionMaps.Count == 0)
             {
-                Debug.LogWarning($"PlugInputReader '{name}': InputActionAsset não possui mapas de ação!");
+                Debug.LogWarning($"[PlugInputReader] '{name}': Input Action Asset has no action maps.");
                 return false;
             }
-            
             return true;
         }
-        
-        /// <summary>
-        /// Obtém informações de debug sobre a configuração
-        /// </summary>
+
         public string GetDebugInfo()
         {
-            if (!IsValid())
-                return "Configuração inválida";
-                
+            if (!IsValid()) return "Invalid configuration";
+
             int totalActions = 0;
             foreach (var map in inputActionAsset.actionMaps)
-            {
                 totalActions += map.actions.Count;
-            }
-            
-            var deviceInfo = enableDeviceManagement ? 
-                $", Dispositivos: {(allowedDevices.Length > 0 ? allowedDevices.Length.ToString() : "Todos")}" : "";
-            
-            return $"Mapas: {inputActionAsset.actionMaps.Count}, Ações: {totalActions}{deviceInfo}";
+
+            string deviceInfo = enableDeviceManagement
+                ? $", Devices: {(allowedDevices.Length > 0 ? allowedDevices.Length.ToString() : "All")}"
+                : "";
+
+            return $"Maps: {inputActionAsset.actionMaps.Count}, Actions: {totalActions}{deviceInfo}";
         }
-        
-        #if UNITY_EDITOR
-        /// <summary>
-        /// Validação no editor
-        /// </summary>
+
+#if UNITY_EDITOR
         private void OnValidate()
         {
-            debugHandleSize = Mathf.Clamp(debugHandleSize, 1f, 300f);
-            debugHandleColor.a = Mathf.Clamp01(debugHandleColor.a);
-            deviceSwitchCooldown = Mathf.Clamp(deviceSwitchCooldown, 0f, 2f);
+            debugHandleSize       = Mathf.Clamp(debugHandleSize, 1f, 300f);
+            debugHandleColor.a    = Mathf.Clamp01(debugHandleColor.a);
+            deviceSwitchCooldown  = Mathf.Clamp(deviceSwitchCooldown, 0f, 2f);
         }
-        #endif
+#endif
     }
 }

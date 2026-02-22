@@ -9,16 +9,16 @@ namespace PlugInputPack
     /// </summary>
     public class PlugInputVisualizer
     {
-        private bool _isEnabled = false;
-        private Color _handleColor = new Color(0, 1, 0, 0.85f);
+        private bool _isEnabled;
+        private Color _handleColor = new (0, 1, 0, 0.85f);
         private Rect _debugPanelRect;
         private float _handleScale = 1.0f;
         
-        private readonly Dictionary<string, string> _valueCache = new Dictionary<string, string>();
-        private readonly List<string> _activeInputs = new List<string>();
-        private readonly HashSet<string> _lastFrameInputs = new HashSet<string>();
+        private readonly Dictionary<string, string> _valueCache = new();
+        private readonly List<string> _activeInputs = new();
+        private readonly HashSet<string> _lastFrameInputs = new();
         
-        private Dictionary<string, float> _inactivityTimers = new Dictionary<string, float>();
+        private Dictionary<string, float> _inactivityTimers = new();
         private const float INACTIVITY_THRESHOLD = 0.2f;
         
         private Texture2D _panelTexture;
@@ -155,7 +155,7 @@ namespace PlugInputPack
                 _debugPanelRect.width - (scaledPadding * 2),
                 20 * _handleScale
             );
-            GUI.Label(headerRect, "Inputs Ativos", _headerStyle);
+            GUI.Label(headerRect, "Active Inputs", _headerStyle);
             
             Rect lineRect = new Rect(
                 _debugPanelRect.x + (scaledPadding * 1.5f),
