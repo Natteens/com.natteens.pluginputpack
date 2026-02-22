@@ -1,3 +1,10 @@
+## [2.1.2](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.1.1...v2.1.2) (2026-02-22)
+
+
+### Bug Fixes
+
+* Reorganize code and revamp editor inspectors ([143d083](https://github.com/Natteens/com.natteens.pluginputpack/commit/143d083b5baedee0ff3dad2a829459c09fec7ea4))
+
 ## [2.1.1](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.1.0...v2.1.1) (2026-02-22)
 
 
