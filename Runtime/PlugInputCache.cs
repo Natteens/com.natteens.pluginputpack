@@ -21,7 +21,7 @@ namespace PlugInputPack
         {
             if (action == null)
             {
-                UnityEngine.Debug.LogWarning("PlugInputCache: Tentativa de registrar InputAction nulo!");
+                UnityEngine.Debug.LogWarning("[PlugInputCache] Attempted to register a null InputAction.");
                 return;
             }
 
@@ -160,7 +160,7 @@ namespace PlugInputPack
         /// </summary>
         public string GetCacheStats()
         {
-            return $"Estados: {_states.Count}, Accessors: {_accessors.Count}, Pool: {_accessorPool.Count}";
+            return $"States: {_states.Count}, Accessors: {_accessors.Count}, Pool: {_accessorPool.Count}";
         }
     }
 }

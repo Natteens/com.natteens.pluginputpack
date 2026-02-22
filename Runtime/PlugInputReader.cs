@@ -11,26 +11,26 @@ namespace PlugInputPack
         private InputActionAsset inputActionAsset;
 
         [Header("Debug")]
-        [SerializeField, Tooltip("Print input activity to the console.")]
+        [SerializeField, Tooltip("Print input activity to the Unity console.")]
         private bool enableDebug;
 
-        [SerializeField, Tooltip("Show a real-time input overlay on screen.")]
+        [SerializeField, Tooltip("Show a real-time input overlay on screen during Play Mode.")]
         private bool enableVisualDebug;
 
-        [SerializeField, Tooltip("Scale of the visual debug overlay elements."), Range(1f, 300f)]
-        private float debugHandleSize = 100f;
-
-        [SerializeField, Tooltip("Color used for the visual debug overlay.")]
-        private Color debugHandleColor = Color.yellow;
+        // Overlay scale and color are intentionally hidden from the inspector.
+        // Scale is computed automatically from screen size by PlugInputVisualizer.
+        // These fields exist only to avoid breaking the Initialize() API signature.
+        [HideInInspector] [SerializeField] private float debugHandleSize = 100f;
+        [HideInInspector] [SerializeField] private Color debugHandleColor = Color.yellow;
 
         [Header("Device Management")]
         [SerializeField, Tooltip("Detect and track which input device the player is using.")]
         private bool enableDeviceManagement = true;
 
-        [SerializeField, Tooltip("When enabled, only inputs from the currently active device are processed. Useful for preventing ghost inputs when switching between keyboard and gamepad.")]
+        [SerializeField, Tooltip("When enabled, only inputs from the currently active device are processed. Prevents ghost inputs when switching between keyboard and gamepad.")]
         private bool strictDeviceIsolation;
 
-        [SerializeField, Tooltip("Minimum time in seconds before the active device can change again. Prevents accidental flicker when two devices are used simultaneously."), Range(0f, 2f)]
+        [SerializeField, Tooltip("Minimum time in seconds before the active device can change again."), Range(0f, 2f)]
         private float deviceSwitchCooldown = 0.1f;
 
         [SerializeField, Tooltip("Restrict input to specific device types. Leave empty to allow all devices.")]
@@ -40,7 +40,7 @@ namespace PlugInputPack
         [SerializeField, Tooltip("Lock and hide the cursor when the scene starts.")]
         private bool lockCursorOnStart;
 
-        [SerializeField, Tooltip("Automatically lock the cursor when a gamepad, joystick, or XR controller is detected, and unlock it when switching back to keyboard/mouse.")]
+        [SerializeField, Tooltip("Automatically lock the cursor when a gamepad, joystick, or XR controller is detected.")]
         private bool autoLockCursorOnGamepad = true;
 
         // --- Accessors ---
@@ -92,9 +92,7 @@ namespace PlugInputPack
 #if UNITY_EDITOR
         private void OnValidate()
         {
-            debugHandleSize       = Mathf.Clamp(debugHandleSize, 1f, 300f);
-            debugHandleColor.a    = Mathf.Clamp01(debugHandleColor.a);
-            deviceSwitchCooldown  = Mathf.Clamp(deviceSwitchCooldown, 0f, 2f);
+            deviceSwitchCooldown = Mathf.Clamp(deviceSwitchCooldown, 0f, 2f);
         }
 #endif
     }

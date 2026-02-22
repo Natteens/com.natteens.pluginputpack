@@ -506,12 +506,12 @@ namespace PlugInputPack
         /// </summary>
         public string GetDebugInfo()
         {
-            var info = $"Dispositivo Atual: {CurrentDeviceName} ({_currentDeviceType})\n";
-            info += $"Isolamento: {(_strictIsolation ? "Ativo" : "Inativo")}\n";
-            info += $"Dispositivos Permitidos: {_allowedDevices.Count}\n";
-            info += $"Total de Tipos: {_devicesByType.Count}\n";
-            info += $"Threshold de Atividade: {_inputActivityThreshold:F3}\n";
-            info += $"Cooldown: {_deviceSwitchCooldown:F2}s";
+            var info = $"Device: {CurrentDeviceName} ({_currentDeviceType})\n";
+            info += $"Strict Isolation: {(_strictIsolation ? "On" : "Off")}\n";
+            info += $"Allowed Devices: {_allowedDevices.Count}\n";
+            info += $"Device Types Seen: {_devicesByType.Count}\n";
+            info += $"Activity Threshold: {_inputActivityThreshold:F3}\n";
+            info += $"Switch Cooldown: {_deviceSwitchCooldown:F2}s";
             return info;
         }
         

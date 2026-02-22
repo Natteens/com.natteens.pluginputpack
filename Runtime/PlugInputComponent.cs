@@ -67,7 +67,7 @@ namespace PlugInputPack
             if (inputReader != null && inputReader.InputActionAsset != null)
                 InitializeInputSystem();
             else
-                Debug.LogWarning("PlugInputPack: Input Reader or Input Action Asset not configured!");
+                Debug.LogWarning("[PlugInput] No Input Reader or Input Action Asset assigned.");
         }
 
         private void InitializeInputSystem()
@@ -75,7 +75,7 @@ namespace PlugInputPack
             var actionAsset = inputReader.InputActionAsset;
             if (actionAsset == null)
             {
-                Debug.LogError("PlugInputPack: InputActionAsset cannot be null!");
+                Debug.LogError("[PlugInput] InputActionAsset is null — cannot initialize.");
                 return;
             }
 
@@ -109,7 +109,7 @@ namespace PlugInputPack
             }
 
             if (inputReader.EnableDebug)
-                Debug.Log($"PlugInputPack: Initialized with {actionAsset.actionMaps.Count} action maps and {total} actions.");
+                _debugger.LogReady(actionAsset.actionMaps.Count, total);
         }
 
         private void LateUpdate()
@@ -251,7 +251,7 @@ namespace PlugInputPack
         private void HandleDeviceChanged(PlugInputDeviceManager.DeviceType previous, PlugInputDeviceManager.DeviceType current)
         {
             if (inputReader.EnableDebug)
-                Debug.Log($"PlugInputPack: Device changed from {previous} to {current}");
+                _debugger.LogDeviceChanged(previous.ToString(), current.ToString());
 
             if (!_hasManualOverride && inputReader.AutoLockCursorOnGamepad)
             {
@@ -266,19 +266,19 @@ namespace PlugInputPack
 
         private void HandleDeviceConnected(InputDevice device)
         {
-            if (inputReader.EnableDebug) Debug.Log($"PlugInputPack: Device connected: {device.displayName}");
+            if (inputReader.EnableDebug) _debugger.LogDeviceEvent("Device connected", device.displayName);
             OnDeviceConnected?.Invoke(device);
         }
 
         private void HandleDeviceDisconnected(InputDevice device)
         {
-            if (inputReader.EnableDebug) Debug.Log($"PlugInputPack: Device disconnected: {device.displayName}");
+            if (inputReader.EnableDebug) _debugger.LogDeviceEvent("Device disconnected", device.displayName);
             OnDeviceDisconnected?.Invoke(device);
         }
 
         private void HandleDeviceFiltered(PlugInputDeviceManager.DeviceType deviceType)
         {
-            if (inputReader.EnableDebug) Debug.Log($"PlugInputPack: Device {deviceType} was filtered (not allowed)");
+            if (inputReader.EnableDebug) _debugger.LogDeviceEvent("Device filtered", deviceType.ToString());
             OnDeviceFiltered?.Invoke(deviceType);
         }
 
@@ -332,7 +332,7 @@ namespace PlugInputPack
             {
                 if (string.IsNullOrEmpty(actionName))
                 {
-                    Debug.LogWarning("PlugInputPack: Action name is null or empty!");
+                    Debug.LogWarning("[PlugInput] Action name is null or empty.");
                     return null;
                 }
                 return _cache.GetAccessor(actionName);
