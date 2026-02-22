@@ -1,3 +1,10 @@
+## [2.1.1](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.1.0...v2.1.1) (2026-02-22)
+
+
+### Bug Fixes
+
+* Refactor editor UI, localize and modernize code ([368c38b](https://github.com/Natteens/com.natteens.pluginputpack/commit/368c38bfe194822ede60e2fb78c11e2c146738e4))
+
 # [2.1.0](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.0.5...v2.1.0) (2026-02-22)
 
 
