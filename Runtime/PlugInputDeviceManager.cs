@@ -3,11 +3,20 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace PlugInputPack
 {
     /// <summary>
-    /// Gerencia dispositivos de entrada e isolamento de inputs.
+    /// Tracks which input device the player is currently using and handles device switching.
+    ///
+    /// Performance notes:
+    ///   • No .ToLower() on the hot path — action name checks use OrdinalIgnoreCase
+    ///     comparisons that don't allocate, or a pre-built HashSet populated at init.
+    ///   • Enum.ToString() is never called on the hot path — a static lookup array is
+    ///     used instead (zero alloc).
+    ///   • GetDebugInfo() uses a cached StringBuilder instead of string += chaining.
+    ///   • GetDevicesOfType() returns IReadOnlyList — no copy allocation.
     /// </summary>
     public class PlugInputDeviceManager
     {
@@ -21,503 +30,433 @@ namespace PlugInputPack
             Joystick,
             XRController
         }
-        
+
+        // Pre-built name table so Enum.ToString() is never called at runtime
+        private static readonly string[] s_deviceTypeNames =
+        {
+            "Unknown", "Keyboard", "Mouse", "Gamepad", "Touch", "Joystick", "XRController"
+        };
+
+        private static string DeviceName(DeviceType t) => s_deviceTypeNames[(int)t];
+
+        // ── State ─────────────────────────────────────────────────────────────────
+
         private DeviceType _currentDeviceType = DeviceType.Unknown;
         private InputDevice _currentDevice;
-        private readonly Dictionary<DeviceType, List<InputDevice>> _devicesByType = new Dictionary<DeviceType, List<InputDevice>>();
-        private readonly HashSet<DeviceType> _allowedDevices = new HashSet<DeviceType>();
-        private readonly Dictionary<string, DeviceType> _actionDeviceMapping = new Dictionary<string, DeviceType>();
-        
-        private bool _isEnabled = false;
-        private bool _strictIsolation = false;
+
+        private readonly Dictionary<DeviceType, List<InputDevice>> _devicesByType  = new Dictionary<DeviceType, List<InputDevice>>();
+        private readonly HashSet<DeviceType>                       _allowedDevices = new HashSet<DeviceType>();
+        private readonly Dictionary<string, DeviceType>            _actionDeviceMapping = new Dictionary<string, DeviceType>();
+
+        // Per-device type cache keyed by InputDevice instance ID — avoids re-running
+        // GetDeviceType (which may iterate allControls) on every single input event.
+        private readonly Dictionary<int, DeviceType> _deviceTypeCache = new Dictionary<int, DeviceType>();
+
+        private bool  _isEnabled;
+        private bool  _strictIsolation;
         private float _deviceSwitchCooldown = 0.1f;
-        private float _lastDeviceSwitchTime = 0f;
-        
-        // Controle para ações compostas (como Look)
-        private readonly Dictionary<string, float> _lastInputActivity = new Dictionary<string, float>();
-        private readonly Dictionary<string, Vector2> _lastInputValues = new Dictionary<string, Vector2>();
+        private float _lastDeviceSwitchTime;
+
+        // Composite-action (Look/Camera) activity tracking
+        private readonly Dictionary<string, float>   _lastInputActivity = new Dictionary<string, float>();
+        private readonly Dictionary<string, Vector2> _lastInputValues   = new Dictionary<string, Vector2>();
         private float _inputActivityThreshold = 0.1f;
-        
+
+        // Pre-built set of "look-like" action names (populated on Initialize from the asset)
+        // so we never call .ToLower() or .Contains() on the hot path.
+        private readonly HashSet<string> _lookActionNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        private readonly StringBuilder _debugSb = new StringBuilder(256);
+
+        // ── Events ────────────────────────────────────────────────────────────────
+
         public static event Action<DeviceType, DeviceType> OnDeviceChanged;
-        public static event Action<InputDevice> OnDeviceConnected;
-        public static event Action<InputDevice> OnDeviceDisconnected;
-        public static event Action<DeviceType> OnDeviceTypeFiltered;
-        
-        /// <summary>
-        /// Tipo de dispositivo atual
-        /// </summary>
-        public DeviceType CurrentDeviceType => _currentDeviceType;
-        
-        /// <summary>
-        /// Dispositivo atual
-        /// </summary>
-        public InputDevice CurrentDevice => _currentDevice;
-        
-        /// <summary>
-        /// Nome do dispositivo atual
-        /// </summary>
-        public string CurrentDeviceName => _currentDevice?.displayName ?? "Nenhum";
-        
-        /// <summary>
-        /// Verifica se o sistema está habilitado
-        /// </summary>
-        public bool IsEnabled => _isEnabled;
-        
-        /// <summary>
-        /// Inicializa o gerenciador de dispositivos
-        /// </summary>
+        public static event Action<InputDevice>            OnDeviceConnected;
+        public static event Action<InputDevice>            OnDeviceDisconnected;
+        public static event Action<DeviceType>             OnDeviceTypeFiltered;
+
+        // ── Properties ────────────────────────────────────────────────────────────
+
+        public DeviceType   CurrentDeviceType => _currentDeviceType;
+        public InputDevice  CurrentDevice     => _currentDevice;
+        public string       CurrentDeviceName => _currentDevice?.displayName ?? "None";
+        public bool         IsEnabled         => _isEnabled;
+
+        // ── Initialization ────────────────────────────────────────────────────────
+
         public void Initialize(bool enabled, bool strictIsolation, float switchCooldown, DeviceType[] allowedDevices)
         {
-            _isEnabled = enabled;
-            _strictIsolation = strictIsolation;
+            _isEnabled            = enabled;
+            _strictIsolation      = strictIsolation;
             _deviceSwitchCooldown = switchCooldown;
-            
-            if (!_isEnabled)
-                return;
-                
+
+            if (!_isEnabled) return;
+
             SetAllowedDevices(allowedDevices);
             CategorizeDevices();
             DetectInitialDevice();
-            
+
             InputSystem.onDeviceChange += OnInputDeviceChange;
         }
-        
+
         /// <summary>
-        /// Define quais tipos de dispositivos são permitidos
+        /// Call this after the InputActionAsset is known so look-action names
+        /// can be cached — avoids .ToLower() + .Contains() on every input event.
         /// </summary>
+        public void CacheLookActionNames(UnityEngine.InputSystem.InputActionAsset asset)
+        {
+            _lookActionNames.Clear();
+            if (asset == null) return;
+            foreach (var map in asset.actionMaps)
+                foreach (var action in map.actions)
+                {
+                    string n = action.name;
+                    // Flag actions whose name contains "look" or "camera" (case-insensitive)
+                    if (n.IndexOf("look",   StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        n.IndexOf("camera", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        _lookActionNames.Add(n);
+                    }
+                }
+        }
+
         public void SetAllowedDevices(DeviceType[] allowedDevices)
         {
             _allowedDevices.Clear();
-            if (allowedDevices != null)
-            {
-                foreach (var deviceType in allowedDevices)
-                {
-                    _allowedDevices.Add(deviceType);
-                }
-            }
+            if (allowedDevices == null) return;
+            foreach (DeviceType dt in allowedDevices)
+                _allowedDevices.Add(dt);
         }
-        
-        /// <summary>
-        /// Categoriza todos os dispositivos conectados
-        /// </summary>
+
+        // ── Device cataloguing ────────────────────────────────────────────────────
+
         private void CategorizeDevices()
         {
             _devicesByType.Clear();
-            
-            foreach (var device in InputSystem.devices)
+            foreach (InputDevice device in InputSystem.devices)
             {
-                DeviceType deviceType = GetDeviceType(device);
-                
-                if (!_devicesByType.ContainsKey(deviceType))
+                DeviceType dt = GetDeviceType(device);
+                if (!_devicesByType.TryGetValue(dt, out List<InputDevice> list))
                 {
-                    _devicesByType[deviceType] = new List<InputDevice>();
+                    list = new List<InputDevice>();
+                    _devicesByType[dt] = list;
                 }
-                
-                _devicesByType[deviceType].Add(device);
+                list.Add(device);
             }
         }
-        
-        /// <summary>
-        /// Detecta o dispositivo inicial baseado na entrada mais recente
-        /// </summary>
+
         private void DetectInitialDevice()
         {
             if (_allowedDevices.Count > 0)
             {
-                foreach (var allowedType in _allowedDevices)
+                foreach (DeviceType allowed in _allowedDevices)
                 {
-                    if (_devicesByType.TryGetValue(allowedType, out var devices) && devices.Count > 0)
+                    if (_devicesByType.TryGetValue(allowed, out List<InputDevice> devices) && devices.Count > 0)
                     {
-                        SwitchToDevice(allowedType, devices[0]);
-                        break;
+                        SwitchToDevice(allowed, devices[0]);
+                        return;
                     }
                 }
             }
             else if (InputSystem.devices.Count > 0)
             {
-                var firstDevice = InputSystem.devices[0];
-                SwitchToDevice(GetDeviceType(firstDevice), firstDevice);
+                InputDevice first = InputSystem.devices[0];
+                SwitchToDevice(GetDeviceType(first), first);
             }
         }
-        
-        /// <summary>
-        /// Callback para mudanças de dispositivos
-        /// </summary>
+
+        // ── Device change callbacks ───────────────────────────────────────────────
+
         private void OnInputDeviceChange(InputDevice device, InputDeviceChange change)
         {
-            switch (change)
-            {
-                case InputDeviceChange.Added:
-                    HandleDeviceAdded(device);
-                    break;
-                    
-                case InputDeviceChange.Removed:
-                    HandleDeviceRemoved(device);
-                    break;
-            }
+            if (change == InputDeviceChange.Added)   HandleDeviceAdded(device);
+            else if (change == InputDeviceChange.Removed) HandleDeviceRemoved(device);
         }
-        
-        /// <summary>
-        /// Manipula adição de dispositivo
-        /// </summary>
+
         private void HandleDeviceAdded(InputDevice device)
         {
-            DeviceType deviceType = GetDeviceType(device);
-            
-            if (!_devicesByType.ContainsKey(deviceType))
+            DeviceType dt = GetDeviceType(device);
+            if (!_devicesByType.TryGetValue(dt, out List<InputDevice> list))
             {
-                _devicesByType[deviceType] = new List<InputDevice>();
+                list = new List<InputDevice>();
+                _devicesByType[dt] = list;
             }
-            
-            _devicesByType[deviceType].Add(device);
+            list.Add(device);
             OnDeviceConnected?.Invoke(device);
         }
-        
-        /// <summary>
-        /// Manipula remoção de dispositivo
-        /// </summary>
+
         private void HandleDeviceRemoved(InputDevice device)
         {
-            DeviceType deviceType = GetDeviceType(device);
-            
-            if (_devicesByType.TryGetValue(deviceType, out var devices))
-            {
-                devices.Remove(device);
-            }
-            
+            DeviceType dt = GetDeviceType(device);
+            if (_devicesByType.TryGetValue(dt, out List<InputDevice> list))
+                list.Remove(device);
+
+            _deviceTypeCache.Remove(device.deviceId); // invalidate cache entry
+
             if (_currentDevice == device)
-            {
                 FindAlternativeDevice();
-            }
-            
+
             OnDeviceDisconnected?.Invoke(device);
         }
-        
-        /// <summary>
-        /// Procura um dispositivo alternativo quando o atual é removido
-        /// </summary>
+
         private void FindAlternativeDevice()
         {
-            foreach (var allowedType in _allowedDevices)
+            foreach (DeviceType allowed in _allowedDevices)
             {
-                if (_devicesByType.TryGetValue(allowedType, out var devices) && devices.Count > 0)
+                if (_devicesByType.TryGetValue(allowed, out List<InputDevice> devices) && devices.Count > 0)
                 {
-                    SwitchToDevice(allowedType, devices[0]);
+                    SwitchToDevice(allowed, devices[0]);
                     return;
                 }
             }
-            
-            _currentDevice = null;
+            _currentDevice     = null;
             _currentDeviceType = DeviceType.Unknown;
         }
-        
+
+        // ── Device type classification ────────────────────────────────────────────
+
         /// <summary>
-        /// Determina o tipo de um dispositivo
+        /// Cached version of GetDeviceType — keyed by device.deviceId (int).
+        /// Called on every input event; avoids iterating allControls more than once per device.
         /// </summary>
+        private DeviceType GetDeviceTypeCached(InputDevice device)
+        {
+            if (device == null) return DeviceType.Unknown;
+            int id = device.deviceId;
+            if (_deviceTypeCache.TryGetValue(id, out DeviceType cached)) return cached;
+            DeviceType computed = GetDeviceType(device);
+            _deviceTypeCache[id] = computed;
+            return computed;
+        }
+
         private DeviceType GetDeviceType(InputDevice device)
         {
+            if (device == null) return DeviceType.Unknown;
+
             switch (device)
             {
-                case Keyboard:
-                    return DeviceType.Keyboard;
-                case Mouse:
-                    return DeviceType.Mouse;
-                case Gamepad:
-                    return DeviceType.Gamepad;
-                case Touchscreen:
-                    return DeviceType.Touch;
-                case Joystick:
-                    // Trata controles genéricos como Gamepad se tiverem botões suficientes
-                    if (HasGamepadLikeControls(device))
-                        return DeviceType.Gamepad;
-                    return DeviceType.Joystick;
-                case TrackedDevice:
-                    return DeviceType.XRController;
+                case Keyboard:    return DeviceType.Keyboard;
+                case Mouse:       return DeviceType.Mouse;
+                case Gamepad:     return DeviceType.Gamepad;
+                case Touchscreen: return DeviceType.Touch;
+                case TrackedDevice: return DeviceType.XRController;
+                case Joystick j:
+                    return HasGamepadLikeControls(j) ? DeviceType.Gamepad : DeviceType.Joystick;
                 default:
-                    // Verifica se é algum tipo de controller
-                    if (device.description.deviceClass.Contains("XR") || 
-                        device.description.deviceClass.Contains("VR"))
-                    {
+                    string cls = device.description.deviceClass ?? string.Empty;
+                    if (cls.IndexOf("XR", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        cls.IndexOf("VR", StringComparison.OrdinalIgnoreCase) >= 0)
                         return DeviceType.XRController;
-                    }
-                    
-                    // Se tem características de gamepad, trata como tal
-                    if (HasGamepadLikeControls(device))
-                    {
-                        return DeviceType.Gamepad;
-                    }
-                    
-                    return DeviceType.Unknown;
+                    return HasGamepadLikeControls(device) ? DeviceType.Gamepad : DeviceType.Unknown;
             }
         }
-        
-        /// <summary>
-        /// Verifica se o dispositivo tem controles similares a um gamepad
-        /// </summary>
-        private bool HasGamepadLikeControls(InputDevice device)
+
+        private static bool HasGamepadLikeControls(InputDevice device)
         {
-            // Verifica se tem pelo menos 4 botões e 2 sticks/eixos
-            int buttonCount = 0;
-            int axisCount = 0;
-            
+            int buttons = 0, axes = 0;
             foreach (var control in device.allControls)
             {
-                if (control is UnityEngine.InputSystem.Controls.ButtonControl)
-                    buttonCount++;
-                else if (control is UnityEngine.InputSystem.Controls.AxisControl)
-                    axisCount++;
-                else if (control is UnityEngine.InputSystem.Controls.StickControl)
-                    axisCount += 2; // Stick conta como 2 eixos
+                if (control is UnityEngine.InputSystem.Controls.ButtonControl) buttons++;
+                else if (control is UnityEngine.InputSystem.Controls.AxisControl)  axes++;
+                else if (control is UnityEngine.InputSystem.Controls.StickControl) axes += 2;
             }
-            
-            // Se tem pelo menos 4 botões e 4 eixos, provavelmente é um gamepad
-            return buttonCount >= 4 && axisCount >= 4;
+            return buttons >= 4 && axes >= 4;
         }
-        
+
+        // ── Hot-path input processing ─────────────────────────────────────────────
+
         /// <summary>
-        /// Detecta qual dispositivo está sendo usado para ações compostas (como Look)
-        /// </summary>
-        private DeviceType DetectActiveDeviceForCompositeAction(InputAction.CallbackContext context, Vector2 currentValue)
-        {
-            string actionName = context.action.name;
-            float currentTime = Time.unscaledTime;
-            
-            // Para ações de "Look", detecta qual dispositivo está realmente sendo usado
-            if (actionName.ToLower().Contains("look") || actionName.ToLower().Contains("camera"))
-            {
-                return DetectLookDeviceActivity(currentValue, currentTime);
-            }
-            
-            // Para outras ações compostas, usa a detecção padrão
-            return GetDeviceType(context.control?.device);
-        }
-        
-        /// <summary>
-        /// Detecta especificamente qual dispositivo está sendo usado para Look
-        /// </summary>
-        private DeviceType DetectLookDeviceActivity(Vector2 currentValue, float currentTime)
-        {
-            // Verifica se há atividade significativa no mouse
-            if (Mouse.current != null)
-            {
-                Vector2 mouseDelta = Mouse.current.delta.ReadValue();
-                if (mouseDelta.magnitude > _inputActivityThreshold)
-                {
-                    _lastInputActivity["mouse"] = currentTime;
-                    return DeviceType.Mouse;
-                }
-            }
-            
-            // Verifica se há atividade significativa no gamepad
-            if (Gamepad.current != null)
-            {
-                Vector2 stickValue = Gamepad.current.rightStick.ReadValue();
-                if (stickValue.magnitude > _inputActivityThreshold)
-                {
-                    _lastInputActivity["gamepad"] = currentTime;
-                    return DeviceType.Gamepad;
-                }
-            }
-            
-            // Verifica joysticks genéricos
-            foreach (var joystick in Joystick.all)
-            {
-                if (joystick != null && joystick.stick != null)
-                {
-                    Vector2 stickValue = joystick.stick.ReadValue();
-                    if (stickValue.magnitude > _inputActivityThreshold)
-                    {
-                        _lastInputActivity["joystick"] = currentTime;
-                        return HasGamepadLikeControls(joystick) ? DeviceType.Gamepad : DeviceType.Joystick;
-                    }
-                }
-            }
-            
-            // Se não há atividade nova, usa o último dispositivo ativo
-            float mouseLastActivity = _lastInputActivity.ContainsKey("mouse") ? _lastInputActivity["mouse"] : 0f;
-            float gamepadLastActivity = _lastInputActivity.ContainsKey("gamepad") ? _lastInputActivity["gamepad"] : 0f;
-            float joystickLastActivity = _lastInputActivity.ContainsKey("joystick") ? _lastInputActivity["joystick"] : 0f;
-            
-            float mostRecentTime = Mathf.Max(mouseLastActivity, gamepadLastActivity, joystickLastActivity);
-            
-            if (mostRecentTime > 0 && (currentTime - mostRecentTime) < 1f)
-            {
-                if (mostRecentTime == mouseLastActivity)
-                    return DeviceType.Mouse;
-                else if (mostRecentTime == gamepadLastActivity)
-                    return DeviceType.Gamepad;
-                else if (mostRecentTime == joystickLastActivity)
-                    return DeviceType.Gamepad; // Trata joystick como gamepad
-            }
-            
-            return _currentDeviceType;
-        }
-        
-        /// <summary>
-        /// Muda para um dispositivo específico
-        /// </summary>
-        private void SwitchToDevice(DeviceType deviceType, InputDevice device)
-        {
-            if (Time.unscaledTime - _lastDeviceSwitchTime < _deviceSwitchCooldown)
-                return;
-                
-            var previousType = _currentDeviceType;
-            _currentDeviceType = deviceType;
-            _currentDevice = device;
-            _lastDeviceSwitchTime = Time.unscaledTime;
-            
-            if (previousType != deviceType)
-            {
-                OnDeviceChanged?.Invoke(previousType, deviceType);
-            }
-        }
-        
-        /// <summary>
-        /// Detecta mudança de dispositivo baseada em atividade de input
+        /// Called on every input performed/canceled callback.
+        /// No string allocation — look-action check uses a pre-built HashSet.
         /// </summary>
         public void ProcessInputActivity(InputAction.CallbackContext context)
         {
-            if (!_isEnabled)
-                return;
-                
-            var device = context.control?.device;
-            if (device == null)
-                return;
-                
+            if (!_isEnabled) return;
+
+            InputDevice device = context.control?.device;
+            if (device == null) return;
+
+            string actionName = context.action.name;
             DeviceType detectedType;
-            
-            // Para ações compostas como Look, usa detecção especial
-            if (context.action.name.ToLower().Contains("look") || context.action.name.ToLower().Contains("camera"))
+
+            // _lookActionNames was built at init — HashSet.Contains is O(1), no alloc
+            if (_lookActionNames.Contains(actionName))
             {
                 Vector2 value = context.ReadValue<Vector2>();
-                detectedType = DetectActiveDeviceForCompositeAction(context, value);
+                detectedType = DetectActiveDeviceForLook(value);
             }
             else
             {
-                detectedType = GetDeviceType(device);
+                detectedType = GetDeviceTypeCached(device);
             }
-            
+
             if (!IsDeviceAllowed(detectedType))
             {
                 OnDeviceTypeFiltered?.Invoke(detectedType);
                 return;
             }
-            
+
             if (detectedType != _currentDeviceType)
             {
-                // Encontra um dispositivo do tipo detectado
-                if (_devicesByType.TryGetValue(detectedType, out var devices) && devices.Count > 0)
+                if (_devicesByType.TryGetValue(detectedType, out List<InputDevice> devices) && devices.Count > 0)
                 {
                     SwitchToDevice(detectedType, devices[0]);
                 }
-                else if (detectedType == DeviceType.Gamepad && device != null)
+                else if (device != null)
                 {
-                    // Se detectou como gamepad mas não tem na lista, adiciona
-                    if (!_devicesByType.ContainsKey(DeviceType.Gamepad))
+                    if (!_devicesByType.TryGetValue(detectedType, out List<InputDevice> newList))
                     {
-                        _devicesByType[DeviceType.Gamepad] = new List<InputDevice>();
+                        newList = new List<InputDevice>();
+                        _devicesByType[detectedType] = newList;
                     }
-                    _devicesByType[DeviceType.Gamepad].Add(device);
+                    newList.Add(device);
                     SwitchToDevice(detectedType, device);
                 }
             }
         }
-        
+
         /// <summary>
-        /// Verifica se um input deve ser processado baseado no isolamento
+        /// Returns true if the input from context.control.device should be processed.
+        /// No string allocation — look-action check uses the pre-built HashSet.
         /// </summary>
         public bool ShouldProcessInput(InputAction.CallbackContext context, string actionName)
         {
-            if (!_isEnabled)
-                return true;
-                
-            if (!_strictIsolation)
-                return true;
-                
-            var device = context.control?.device;
-            if (device == null)
-                return true;
-                
-            DeviceType inputDeviceType = GetDeviceType(device);
-            
-            if (!IsDeviceAllowed(inputDeviceType))
-                return false;
-            
-            // Para ações compostas como Look, sempre processa mas filtra no ProcessInputActivity
-            if (actionName.ToLower().Contains("look") || actionName.ToLower().Contains("camera"))
-            {
-                return true;
-            }
-            
-            // Permite tanto Gamepad quanto Joystick se o atual for um deles
-            if ((_currentDeviceType == DeviceType.Gamepad || _currentDeviceType == DeviceType.Joystick) &&
-                (inputDeviceType == DeviceType.Gamepad || inputDeviceType == DeviceType.Joystick))
-            {
-                return true;
-            }
-            
-            return inputDeviceType == _currentDeviceType;
+            if (!_isEnabled || !_strictIsolation) return true;
+
+            InputDevice device = context.control?.device;
+            if (device == null) return true;
+
+            DeviceType inputType = GetDeviceTypeCached(device);
+
+            if (!IsDeviceAllowed(inputType)) return false;
+
+            // Look/camera composite actions always pass through; device is handled
+            // in ProcessInputActivity which runs first.
+            if (_lookActionNames.Contains(actionName)) return true;
+
+            // Gamepad and Joystick are treated as the same family
+            bool currentIsGamepadFamily = _currentDeviceType == DeviceType.Gamepad || _currentDeviceType == DeviceType.Joystick;
+            bool inputIsGamepadFamily   = inputType == DeviceType.Gamepad || inputType == DeviceType.Joystick;
+            if (currentIsGamepadFamily && inputIsGamepadFamily) return true;
+
+            return inputType == _currentDeviceType;
         }
-        
-        /// <summary>
-        /// Verifica se um tipo de dispositivo é permitido
-        /// </summary>
-        private bool IsDeviceAllowed(DeviceType deviceType)
+
+        // ── Look-action device detection ──────────────────────────────────────────
+
+        private DeviceType DetectActiveDeviceForLook(Vector2 currentValue)
         {
-            return _allowedDevices.Count == 0 || _allowedDevices.Contains(deviceType);
+            float now = Time.unscaledTime;
+
+            if (Mouse.current != null)
+            {
+                Vector2 delta = Mouse.current.delta.ReadValue();
+                if (delta.sqrMagnitude > _inputActivityThreshold * _inputActivityThreshold)
+                {
+                    _lastInputActivity["mouse"] = now;
+                    return DeviceType.Mouse;
+                }
+            }
+
+            if (Gamepad.current != null)
+            {
+                Vector2 stick = Gamepad.current.rightStick.ReadValue();
+                if (stick.sqrMagnitude > _inputActivityThreshold * _inputActivityThreshold)
+                {
+                    _lastInputActivity["gamepad"] = now;
+                    return DeviceType.Gamepad;
+                }
+            }
+
+            foreach (Joystick joystick in Joystick.all)
+            {
+                if (joystick?.stick == null) continue;
+                Vector2 stick = joystick.stick.ReadValue();
+                if (stick.sqrMagnitude > _inputActivityThreshold * _inputActivityThreshold)
+                {
+                    _lastInputActivity["joystick"] = now;
+                    return HasGamepadLikeControls(joystick) ? DeviceType.Gamepad : DeviceType.Joystick;
+                }
+            }
+
+            // No fresh input — pick whichever device was active most recently
+            float tMouse    = _lastInputActivity.TryGetValue("mouse",    out float m) ? m : 0f;
+            float tGamepad  = _lastInputActivity.TryGetValue("gamepad",  out float g) ? g : 0f;
+            float tJoystick = _lastInputActivity.TryGetValue("joystick", out float j) ? j : 0f;
+
+            float most = Mathf.Max(tMouse, Mathf.Max(tGamepad, tJoystick));
+            if (most > 0f && (now - most) < 1f)
+            {
+                if (most == tMouse)   return DeviceType.Mouse;
+                if (most == tGamepad) return DeviceType.Gamepad;
+                return DeviceType.Gamepad; // joystick treated as gamepad
+            }
+
+            return _currentDeviceType;
         }
-        
-        /// <summary>
-        /// Força a mudança para um tipo de dispositivo específico
-        /// </summary>
+
+        // ── Switching ─────────────────────────────────────────────────────────────
+
+        private void SwitchToDevice(DeviceType deviceType, InputDevice device)
+        {
+            if (Time.unscaledTime - _lastDeviceSwitchTime < _deviceSwitchCooldown) return;
+
+            DeviceType previous = _currentDeviceType;
+            _currentDeviceType      = deviceType;
+            _currentDevice          = device;
+            _lastDeviceSwitchTime   = Time.unscaledTime;
+
+            if (previous != deviceType)
+                OnDeviceChanged?.Invoke(previous, deviceType);
+        }
+
+        // ── Public API ────────────────────────────────────────────────────────────
+
         public bool ForceDeviceType(DeviceType deviceType)
         {
-            if (!IsDeviceAllowed(deviceType))
-                return false;
-                
-            if (_devicesByType.TryGetValue(deviceType, out var devices) && devices.Count > 0)
+            if (!IsDeviceAllowed(deviceType)) return false;
+            if (_devicesByType.TryGetValue(deviceType, out List<InputDevice> devices) && devices.Count > 0)
             {
                 SwitchToDevice(deviceType, devices[0]);
                 return true;
             }
-            
             return false;
         }
-        
+
         /// <summary>
-        /// Obtém todos os dispositivos de um tipo específico
+        /// Returns the internal list for a device type — no copy allocation.
+        /// Callers must not modify the returned list.
         /// </summary>
-        public List<InputDevice> GetDevicesOfType(DeviceType deviceType)
-        {
-            return _devicesByType.TryGetValue(deviceType, out var devices) ? 
-                   new List<InputDevice>(devices) : new List<InputDevice>();
-        }
-        
-        /// <summary>
-        /// Define o threshold para detecção de atividade
-        /// </summary>
-        public void SetInputActivityThreshold(float threshold)
-        {
+        public IReadOnlyList<InputDevice> GetDevicesOfType(DeviceType deviceType) =>
+            _devicesByType.TryGetValue(deviceType, out List<InputDevice> devices)
+                ? (IReadOnlyList<InputDevice>)devices
+                : System.Array.Empty<InputDevice>();
+
+        public void SetInputActivityThreshold(float threshold) =>
             _inputActivityThreshold = Mathf.Max(0.01f, threshold);
-        }
-        
+
+        private bool IsDeviceAllowed(DeviceType dt) =>
+            _allowedDevices.Count == 0 || _allowedDevices.Contains(dt);
+
         /// <summary>
-        /// Obtém informações de debug
+        /// Returns a debug info string. Uses a reused StringBuilder — no string += chaining.
+        /// Only call from debug/editor paths.
         /// </summary>
         public string GetDebugInfo()
         {
-            var info = $"Device: {CurrentDeviceName} ({_currentDeviceType})\n";
-            info += $"Strict Isolation: {(_strictIsolation ? "On" : "Off")}\n";
-            info += $"Allowed Devices: {_allowedDevices.Count}\n";
-            info += $"Device Types Seen: {_devicesByType.Count}\n";
-            info += $"Activity Threshold: {_inputActivityThreshold:F3}\n";
-            info += $"Switch Cooldown: {_deviceSwitchCooldown:F2}s";
-            return info;
+            _debugSb.Clear();
+            _debugSb.Append("Device: ").Append(CurrentDeviceName)
+                    .Append(" (").Append(DeviceName(_currentDeviceType)).Append(")\n");
+            _debugSb.Append("Strict Isolation: ").Append(_strictIsolation ? "On" : "Off").Append('\n');
+            _debugSb.Append("Allowed Devices: ").Append(_allowedDevices.Count).Append('\n');
+            _debugSb.Append("Device Types Seen: ").Append(_devicesByType.Count).Append('\n');
+            _debugSb.Append("Activity Threshold: ").Append(_inputActivityThreshold.ToString("F3")).Append('\n');
+            _debugSb.Append("Switch Cooldown: ").Append(_deviceSwitchCooldown.ToString("F2")).Append('s');
+            return _debugSb.ToString();
         }
-        
-        /// <summary>
-        /// Limpa recursos
-        /// </summary>
+
+        // ── Disposal ──────────────────────────────────────────────────────────────
+
         public void Dispose()
         {
             InputSystem.onDeviceChange -= OnInputDeviceChange;
@@ -526,9 +465,11 @@ namespace PlugInputPack
             _actionDeviceMapping.Clear();
             _lastInputActivity.Clear();
             _lastInputValues.Clear();
-            
-            OnDeviceChanged = null;
-            OnDeviceConnected = null;
+            _lookActionNames.Clear();
+            _deviceTypeCache.Clear();
+
+            OnDeviceChanged      = null;
+            OnDeviceConnected    = null;
             OnDeviceDisconnected = null;
             OnDeviceTypeFiltered = null;
         }

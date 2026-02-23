@@ -4,19 +4,18 @@ using System.Collections.Generic;
 namespace PlugInputPack
 {
     /// <summary>
-    /// Gerencia o cache de estados e acessores de input.
+    /// Manages per-action InputState instances and their pooled InputAccessors.
     /// </summary>
     public class PlugInputCache
     {
-        private readonly Dictionary<string, InputState> _states = new Dictionary<string, InputState>();
-        
-        private readonly Dictionary<string, InputAccessor> _accessors = new Dictionary<string, InputAccessor>();
-        
-        private readonly Stack<InputAccessor> _accessorPool = new Stack<InputAccessor>();
-        
-        /// <summary>
-        /// Registra um estado de input
-        /// </summary>
+        private readonly Dictionary<string, InputState> _stateMap  = new Dictionary<string, InputState>();
+        private readonly List<InputState>               _stateList = new List<InputState>(); // parallel — used for zero-alloc iteration
+
+        private readonly Dictionary<string, InputAccessor> _accessors   = new Dictionary<string, InputAccessor>();
+        private readonly Stack<InputAccessor>              _accessorPool = new Stack<InputAccessor>();
+
+        // ── Registration ─────────────────────────────────────────────────────────
+
         public void RegisterState(InputAction action)
         {
             if (action == null)
@@ -25,142 +24,100 @@ namespace PlugInputPack
                 return;
             }
 
-            if (!_states.ContainsKey(action.name))
+            if (!_stateMap.ContainsKey(action.name))
             {
-                _states[action.name] = new InputState(action);
+                var state = new InputState(action);
+                _stateMap[action.name] = state;
+                _stateList.Add(state);   // keep list in sync
             }
         }
-        
-        /// <summary>
-        /// Obtém um estado de input
-        /// </summary>
+
+        // ── State access ──────────────────────────────────────────────────────────
+
         public InputState GetState(string actionName)
         {
-            if (string.IsNullOrEmpty(actionName))
-                return null;
-                
-            if (_states.TryGetValue(actionName, out var state))
-                return state;
-                
-            return null;
+            if (string.IsNullOrEmpty(actionName)) return null;
+            _stateMap.TryGetValue(actionName, out InputState state);
+            return state;
         }
-        
-        /// <summary>
-        /// Obtém ou cria um accessor para um input
-        /// </summary>
+
+        // ── Accessor pool ─────────────────────────────────────────────────────────
+
         public InputAccessor GetAccessor(string actionName)
         {
-            if (string.IsNullOrEmpty(actionName))
-                return null;
-                
-            if (_accessors.TryGetValue(actionName, out var accessor))
-                return accessor;
-                
-            var state = GetState(actionName);
-            if (state == null)
-                return null;
-                
-            InputAccessor newAccessor;
-            if (_accessorPool.Count > 0)
-            {
-                newAccessor = _accessorPool.Pop();
-                newAccessor.Initialize(state); 
-            }
-            else
-            {
-                newAccessor = new InputAccessor(state);
-            }
-            
-            _accessors[actionName] = newAccessor;
-            return newAccessor;
+            if (string.IsNullOrEmpty(actionName)) return null;
+
+            if (_accessors.TryGetValue(actionName, out InputAccessor existing))
+                return existing;
+
+            InputState state = GetState(actionName);
+            if (state == null) return null;
+
+            InputAccessor accessor = _accessorPool.Count > 0
+                ? _accessorPool.Pop()
+                : new InputAccessor(state);
+
+            accessor.Initialize(state);
+            _accessors[actionName] = accessor;
+            return accessor;
         }
-        
-        /// <summary>
-        /// Retorna um accessor para o pool para reutilização
-        /// </summary>
+
         public void ReturnAccessorToPool(string actionName)
         {
-            if (string.IsNullOrEmpty(actionName))
-                return;
-                
-            if (_accessors.TryGetValue(actionName, out var accessor))
-            {
-                _accessors.Remove(actionName);
-                accessor.Reset(); 
-                _accessorPool.Push(accessor);
-            }
+            if (string.IsNullOrEmpty(actionName)) return;
+            if (!_accessors.TryGetValue(actionName, out InputAccessor accessor)) return;
+
+            _accessors.Remove(actionName);
+            accessor.Reset();
+            _accessorPool.Push(accessor);
         }
-        
+
+        // ── Per-frame update (called from LateUpdate) ─────────────────────────────
+
         /// <summary>
-        /// Atualiza todos os estados
+        /// Flushes pressed/released buffers for every registered state.
+        /// Uses List iteration — struct enumerator, zero heap allocation.
         /// </summary>
         public void UpdateStates()
         {
-            foreach (var state in _states.Values)
-            {
-                state?.Update();
-            }
+            // List<T>.Enumerator is a struct — no allocation on Mono or IL2CPP
+            for (int i = 0; i < _stateList.Count; i++)
+                _stateList[i].Update();
         }
-        
+
+        // ── Queries ───────────────────────────────────────────────────────────────
+
+        public bool HasInput(string actionName) =>
+            !string.IsNullOrEmpty(actionName) && _stateMap.ContainsKey(actionName);
+
         /// <summary>
-        /// Limpa todos os recursos
+        /// Returns the internal state list for zero-alloc iteration.
+        /// Callers must not add/remove elements.
         /// </summary>
+        public List<InputState> GetStates() => _stateList;
+
+        public IEnumerable<string> GetInputNames() => _stateMap.Keys;
+
+        public string GetCacheStats() =>
+            $"States: {_stateMap.Count}, Accessors: {_accessors.Count}, Pool: {_accessorPool.Count}";
+
+        // ── Disposal ──────────────────────────────────────────────────────────────
+
         public void Dispose()
         {
-            foreach (var state in _states.Values)
-            {
-                state?.Dispose();
-            }
-            
-            foreach (var accessor in _accessors.Values)
-            {
-                accessor?.Dispose();
-            }
-            
+            for (int i = 0; i < _stateList.Count; i++)
+                _stateList[i].Dispose();
+
+            foreach (InputAccessor a in _accessors.Values)
+                a.Dispose();
+
             while (_accessorPool.Count > 0)
-            {
-                var pooledAccessor = _accessorPool.Pop();
-                pooledAccessor?.Dispose();
-            }
-            
-            _states.Clear();
+                _accessorPool.Pop().Dispose();
+
+            _stateMap.Clear();
+            _stateList.Clear();
             _accessors.Clear();
             _accessorPool.Clear();
-        }
-        
-        /// <summary>
-        /// Verifica se um input existe
-        /// </summary>
-        public bool HasInput(string actionName)
-        {
-            if (string.IsNullOrEmpty(actionName))
-                return false;
-                
-            return _states.ContainsKey(actionName);
-        }
-        
-        /// <summary>
-        /// Obtém todos os nomes de inputs
-        /// </summary>
-        public IEnumerable<string> GetInputNames()
-        {
-            return _states.Keys;
-        }
-        
-        /// <summary>
-        /// Obtém todos os estados de input
-        /// </summary>
-        public IEnumerable<InputState> GetStates()
-        {
-            return _states.Values;
-        }
-        
-        /// <summary>
-        /// Obtém estatísticas do cache para debug
-        /// </summary>
-        public string GetCacheStats()
-        {
-            return $"States: {_states.Count}, Accessors: {_accessors.Count}, Pool: {_accessorPool.Count}";
         }
     }
 }

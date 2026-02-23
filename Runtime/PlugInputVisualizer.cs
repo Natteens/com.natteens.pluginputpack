@@ -5,48 +5,67 @@ using System.Text;
 namespace PlugInputPack
 {
     /// <summary>
-    /// Runtime overlay that displays active input states on screen.
-    /// Panel size is computed automatically from the available screen area — no manual scale needed.
+    /// Runtime overlay displaying active input states on screen.
+    ///
+    /// Performance notes:
+    ///   • DrawHandles no longer allocates a new HashSet every frame.
+    ///     Instead two pre-allocated HashSets are swapped each frame (double-buffer).
+    ///   • All Color values used in DrawHandles are pre-computed static readonly fields —
+    ///     no "new Color(...)" per draw call.
+    ///   • FormatValue uses a reused StringBuilder + a string cache, so it only
+    ///     allocates a new string when the value actually changes (not every frame).
+    ///   • List iteration (GetStates) uses index-based loop — struct enumerator, no alloc.
     /// </summary>
     public class PlugInputVisualizer
     {
-        private bool _isEnabled;
-
-        // Auto-computed from screen; recalculated when screen size changes
+        private bool  _isEnabled;
         private float _uiScale;
         private int   _lastScreenWidth;
         private int   _lastScreenHeight;
-
         private Rect  _panelRect;
 
-        // Base layout constants (at 1x scale)
+        // Layout constants (at 1× scale)
         private const float BasePanelWidth  = 300f;
         private const float BasePanelHeight = 320f;
         private const float BaseLineHeight  = 24f;
         private const float BasePadding     = 10f;
         private const float BaseArrowSize   = 16f;
         private const float BaseArrowAreaW  = 50f;
-
-        // Accent color is internal — not exposed as a configurable field
-        private static readonly Color AccentColor = new Color(0.2f, 0.75f, 1f, 1f);
-
-        private readonly Dictionary<string, string> _valueCache     = new();
-        private readonly List<string>               _activeInputs   = new();
-        private readonly HashSet<string>            _lastFrameInputs = new();
-        private readonly Dictionary<string, float>  _inactivityTimers = new();
         private const float InactivityThreshold = 0.2f;
 
+        // Accent / UI colors — computed once, never allocated per-frame
+        private static readonly Color AccentColor     = new Color(0.20f, 0.75f, 1.00f, 1.00f);
+        private static readonly Color AccentDim       = new Color(0.20f, 0.75f, 1.00f, 0.28f);
+        private static readonly Color AccentLine      = new Color(0.20f, 0.75f, 1.00f, 0.70f);
+        private static readonly Color AccentHighlight = new Color(0.20f, 0.75f, 1.00f, 0.12f);
+        private static readonly Color RowAlt          = new Color(1.00f, 1.00f, 1.00f, 0.04f);
+        private static readonly Color SeparatorColor  = new Color(1.00f, 1.00f, 1.00f, 0.18f);
+        private static readonly Color CircleBg        = new Color(0.15f, 0.15f, 0.15f, 0.50f);
+
+        // Double-buffered HashSets — swapped each frame; no per-frame allocation
+        private HashSet<string> _currentFrameActive = new HashSet<string>();
+        private HashSet<string> _prevFrameActive     = new HashSet<string>();
+
+        // Value string cache — only allocates when value changes
+        private readonly Dictionary<string, string>  _valueCache       = new Dictionary<string, string>();
+        private readonly Dictionary<string, float>   _cachedFloatVal   = new Dictionary<string, float>();   // last float rendered
+        private readonly Dictionary<string, Vector2> _cachedVec2Val    = new Dictionary<string, Vector2>(); // last vec2 rendered
+        private readonly List<string>                _activeInputs     = new List<string>();
+        private readonly Dictionary<string, float>   _inactivityTimers = new Dictionary<string, float>();
+
+        // StringBuilder reused for FormatValue — avoids string alloc on stable values
+        private readonly StringBuilder _formatSb = new StringBuilder(32);
+
+        // Textures and styles (created once on Initialize)
         private Texture2D _panelTexture;
-        private Texture2D _solidTexture;
         private Texture2D _circleTexture;
+        private GUIStyle  _headerStyle;
+        private GUIStyle  _labelStyle;
+        private GUIStyle  _valueStyle;
+        private GUIStyle  _emptyStyle;
+        private GUIStyle  _panelStyle;
 
-        private GUIStyle _headerStyle;
-        private GUIStyle _labelStyle;
-        private GUIStyle _valueStyle;
-        private GUIStyle _emptyStyle;
-        private GUIStyle _panelStyle;
-
-        // -------------------------------------------------------------------------
+        // ── Initialization ────────────────────────────────────────────────────────
 
         public void Initialize(bool enabled, float ignoredHandleSize, Color ignoredColor)
         {
@@ -58,133 +77,116 @@ namespace PlugInputPack
             InitStyles();
 
             _activeInputs.Clear();
-            _lastFrameInputs.Clear();
+            _currentFrameActive.Clear();
+            _prevFrameActive.Clear();
             _valueCache.Clear();
             _inactivityTimers.Clear();
         }
 
-        // -------------------------------------------------------------------------
-        // Scale helpers
-        // -------------------------------------------------------------------------
+        // ── Scale ─────────────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// Computes a UI scale that keeps the panel comfortably visible at any resolution.
-        /// Target: panel occupies roughly 22% of screen width, clamped to a sensible range.
-        /// </summary>
         private void RefreshScale()
         {
             _lastScreenWidth  = Screen.width;
             _lastScreenHeight = Screen.height;
-
-            // Fixed scale — the base panel (300x320) is already comfortable to read
-            // at any resolution from a small docked Game view to a maximised monitor.
-            // Scaling by resolution caused the panel to become enormous on large screens.
-            _uiScale = 1.0f;
-
-            float w = BasePanelWidth  * _uiScale;
-            float h = BasePanelHeight * _uiScale;
-            _panelRect = new Rect(10f, Screen.height - h - 10f, w, h);
+            _uiScale = 1.0f; // fixed; base panel size is comfortable at all resolutions
+            _panelRect = new Rect(10f, Screen.height - BasePanelHeight - 10f, BasePanelWidth, BasePanelHeight);
         }
 
-        // -------------------------------------------------------------------------
-        // Drawing
-        // -------------------------------------------------------------------------
+        // ── DrawHandles ───────────────────────────────────────────────────────────
 
         public void DrawHandles(PlugInputCache cache)
         {
             if (!_isEnabled) return;
 
-            // Rebuild if screen was resized (e.g. Play Mode resize, docked/undocked)
             if (Screen.width != _lastScreenWidth || Screen.height != _lastScreenHeight)
             {
                 RefreshScale();
-                InitStyles(); // font sizes depend on scale
+                InitStyles();
             }
 
-            float s         = _uiScale;
-            float lh        = BaseLineHeight  * s;
-            float pad       = BasePadding     * s;
-            float arrowSize = BaseArrowSize   * s;
-            float arrowW    = BaseArrowAreaW  * s;
+            float s        = _uiScale;
+            float lh       = BaseLineHeight * s;
+            float pad      = BasePadding    * s;
+            float arrowSize = BaseArrowSize  * s;
+            float arrowW   = BaseArrowAreaW  * s;
 
-            // Anchor panel to bottom-left
             _panelRect.y      = Screen.height - _panelRect.height - 10f;
             _panelRect.width  = BasePanelWidth  * s;
             _panelRect.height = BasePanelHeight * s;
 
             GUI.Box(_panelRect, "", _panelStyle);
 
-            // --- Header ---
-            Rect headerRect = new Rect(
-                _panelRect.x + pad,
-                _panelRect.y + pad,
-                _panelRect.width - pad * 2f,
-                20f * s
-            );
+            // Header
+            Rect headerRect = new Rect(_panelRect.x + pad, _panelRect.y + pad, _panelRect.width - pad * 2f, 20f * s);
             GUI.Label(headerRect, "Active Inputs", _headerStyle);
 
-            // Separator line
-            Rect lineRect = new Rect(
-                _panelRect.x + pad * 1.5f,
-                headerRect.yMax + 4f * s,
-                _panelRect.width - pad * 3f,
-                Mathf.Max(1f, s)
-            );
-            GUI.color = new Color(1f, 1f, 1f, 0.18f);
-            GUI.DrawTexture(lineRect, _solidTexture);
+            // Separator
+            Rect lineRect = new Rect(_panelRect.x + pad * 1.5f, headerRect.yMax + 4f * s, _panelRect.width - pad * 3f, Mathf.Max(1f, s));
+            GUI.color = SeparatorColor;
+            GUI.DrawTexture(lineRect, Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            // --- Content area ---
+            // Content area
             float contentY = lineRect.yMax + 4f * s;
             float contentH = _panelRect.yMax - contentY - pad;
             Rect  content  = new Rect(_panelRect.x + pad, contentY, _panelRect.width - pad * 2f, contentH);
 
             _activeInputs.Clear();
-            var currentActive = new HashSet<string>();
+            // Swap double-buffer: _currentFrameActive becomes fresh, previous frame stays in _prevFrameActive
+            HashSet<string> tmp = _currentFrameActive;
+            _currentFrameActive = _prevFrameActive;
+            _currentFrameActive.Clear();
+            _prevFrameActive = tmp; // now holds last frame's data for press-flash comparison
 
             float y        = content.y;
             int   index    = 0;
             int   maxItems = Mathf.FloorToInt(contentH / lh);
 
-            foreach (var state in cache.GetStates())
+            List<InputState> states = cache.GetStates();
+            int stateCount = states.Count;
+
+            for (int i = 0; i < stateCount; i++)
             {
+                InputState state = states[i];
                 TickInactivity(state);
 
                 if (!ShouldDisplay(state)) continue;
                 if (index >= maxItems)     break;
 
-                currentActive.Add(state.Name);
-                _activeInputs.Add(state.Name);
+                string name = state.Name;
+                _currentFrameActive.Add(name);
+                _activeInputs.Add(name);
 
                 // Alternate row tint
                 if (index % 2 == 1)
                 {
-                    GUI.color = new Color(1f, 1f, 1f, 0.04f);
-                    GUI.DrawTexture(new Rect(content.x, y, content.width, lh), _solidTexture);
+                    GUI.color = RowAlt;
+                    GUI.DrawTexture(new Rect(content.x, y, content.width, lh), Texture2D.whiteTexture);
                     GUI.color = Color.white;
                 }
 
-                // Press highlight
-                if (state.IsPressed && !_lastFrameInputs.Contains(state.Name))
+                // Press flash (new press this frame = not in previous frame's set)
+                if (state.IsPressed && !_prevFrameActive.Contains(name))
                 {
-                    GUI.color = new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.12f);
+                    GUI.color = AccentHighlight;
                     GUI.DrawTexture(new Rect(content.x - 4f * s, y - 2f * s, content.width + 8f * s, lh + 4f * s), _panelTexture);
                     GUI.color = Color.white;
                 }
 
-                // Name label
+                // Name
                 Rect nameRect = new Rect(content.x + 4f * s, y, content.width * 0.38f, lh);
-                GUI.Label(nameRect, state.Name, _labelStyle);
+                GUI.Label(nameRect, name, _labelStyle);
 
-                // Value label
+                // Value
                 Rect valRect = new Rect(nameRect.xMax + 4f * s, y, content.width * 0.34f, lh);
-                GUI.Label(valRect, FormatValue(state), _valueStyle);
+                GUI.Label(valRect, GetCachedValue(state), _valueStyle);
 
-                // Direction arrow for Vector2
+                // Direction dot for Vector2
                 if (state.InputType == "Vector2")
                 {
                     Vector2 dir = state.AsVector2;
-                    if (dir.magnitude > 0.01f)
+                    if (dir.sqrMagnitude > 0.0001f)
                     {
                         Rect arrowRect = new Rect(
                             content.xMax - arrowW + 4f * s,
@@ -200,35 +202,128 @@ namespace PlugInputPack
                 index++;
             }
 
-            // Update last-frame set
-            _lastFrameInputs.Clear();
-            foreach (string n in currentActive) _lastFrameInputs.Add(n);
-
-            // Empty state message
             if (_activeInputs.Count == 0)
                 GUI.Label(content, "No active inputs", _emptyStyle);
         }
 
-        // -------------------------------------------------------------------------
-        // Helpers
-        // -------------------------------------------------------------------------
+        // ── Value formatting ──────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns a formatted string for the state's current value.
+        /// Uses a cache keyed by action name — only rebuilds (allocates) when value changes.
+        /// Uses StringBuilder to build Vector2/float strings, then caches the result.
+        /// </summary>
+        private string GetCachedValue(InputState state)
+        {
+            switch (state.InputType)
+            {
+                case "Button":
+                case "Digital":
+                {
+                    // Bool: only two possible strings — use literals, never allocate
+                    bool pressed = state.IsPressed;
+                    if (_valueCache.TryGetValue(state.Name, out string prev))
+                    {
+                        bool wasOn = prev == "ON";
+                        if (wasOn == pressed) return prev;
+                    }
+                    string r = pressed ? "ON" : "OFF";
+                    _valueCache[state.Name] = r;
+                    return r;
+                }
+
+                case "Vector2":
+                {
+                    Vector2 v = state.AsVector2;
+
+                    // Only rebuild string if value changed from last render
+                    if (_cachedVec2Val.TryGetValue(state.Name, out Vector2 lastV2) &&
+                        (v - lastV2).sqrMagnitude < 0.005f * 0.005f &&
+                        _valueCache.TryGetValue(state.Name, out string prevV2))
+                        return prevV2;
+
+                    string built;
+                    if (v.sqrMagnitude < 0.0001f)
+                    {
+                        built = "(0.0, 0.0)";
+                    }
+                    else
+                    {
+                        _formatSb.Clear();
+                        _formatSb.Append('(');
+                        AppendF1(_formatSb, v.x);
+                        _formatSb.Append(", ");
+                        AppendF1(_formatSb, v.y);
+                        _formatSb.Append(')');
+                        built = _formatSb.ToString(); // alloc only when value changed
+                    }
+                    _valueCache[state.Name]    = built;
+                    _cachedVec2Val[state.Name] = v;
+                    return built;
+                }
+
+                case "Axis":
+                case "Analog":
+                {
+                    float f = state.AsFloat;
+
+                    // Only rebuild string if float changed beyond display resolution (0.01)
+                    if (_cachedFloatVal.TryGetValue(state.Name, out float lastF) &&
+                        Mathf.Abs(f - lastF) < 0.005f &&
+                        _valueCache.TryGetValue(state.Name, out string prevF))
+                        return prevF;
+
+                    _formatSb.Clear();
+                    AppendF2(_formatSb, f);
+                    string builtF = _formatSb.ToString(); // alloc only when value changed
+                    _valueCache[state.Name]     = builtF;
+                    _cachedFloatVal[state.Name] = f;
+                    return builtF;
+                }
+
+                default:
+                    return state.GetDebugString();
+            }
+        }
+
+        // Fast fixed-precision formatters — avoid string.Format / interpolation allocs
+        private static void AppendF1(StringBuilder sb, float v)
+        {
+            if (v < 0) { sb.Append('-'); v = -v; }
+            int whole = (int)v;
+            int frac  = (int)((v - whole) * 10f + 0.5f);
+            if (frac == 10) { whole++; frac = 0; }
+            sb.Append(whole); sb.Append('.'); sb.Append(frac);
+        }
+
+        private static void AppendF2(StringBuilder sb, float v)
+        {
+            if (v < 0) { sb.Append('-'); v = -v; }
+            int whole = (int)v;
+            int frac  = (int)((v - whole) * 100f + 0.5f);
+            if (frac == 100) { whole++; frac = 0; }
+            sb.Append(whole); sb.Append('.');
+            if (frac < 10) sb.Append('0');
+            sb.Append(frac);
+        }
+
+        // ── Inactivity tracking ───────────────────────────────────────────────────
 
         private void TickInactivity(InputState state)
         {
             bool inactive = state.InputType == "Vector2"
-                ? state.AsVector2.magnitude < 0.01f
+                ? state.AsVector2.sqrMagnitude < 0.0001f
                 : !state.IsPressed;
 
-            if (inactive)
-                _inactivityTimers[state.Name] = _inactivityTimers.TryGetValue(state.Name, out float t) ? t + Time.deltaTime : 0f;
-            else
-                _inactivityTimers[state.Name] = 0f;
+            _inactivityTimers[state.Name] = inactive
+                ? (_inactivityTimers.TryGetValue(state.Name, out float t) ? t + Time.deltaTime : 0f)
+                : 0f;
         }
 
         private bool ShouldDisplay(InputState state)
         {
             bool active = state.InputType == "Vector2"
-                ? state.AsVector2.magnitude >= 0.01f
+                ? state.AsVector2.sqrMagnitude >= 0.0001f
                 : state.IsPressed;
 
             return active
@@ -236,35 +331,7 @@ namespace PlugInputPack
                 || t < InactivityThreshold;
         }
 
-        private string FormatValue(InputState state)
-        {
-            if (_valueCache.TryGetValue(state.Name, out string cached)
-                && state.InputType != "Vector2" && !state.IsPressed)
-                return cached;
-
-            string result;
-            switch (state.InputType)
-            {
-                case "Vector2":
-                    Vector2 v = state.AsVector2;
-                    result = v.magnitude < 0.01f ? "(0.0, 0.0)" : $"({v.x:F1}, {v.y:F1})";
-                    break;
-                case "Button":
-                case "Digital":
-                    result = state.IsPressed ? "ON" : "OFF";
-                    break;
-                case "Axis":
-                case "Analog":
-                    result = state.AsFloat.ToString("F2");
-                    break;
-                default:
-                    result = state.GetDebugString();
-                    break;
-            }
-
-            _valueCache[state.Name] = result;
-            return result;
-        }
+        // ── Direction dot ─────────────────────────────────────────────────────────
 
         private void DrawDirectionDot(Rect rect, Vector2 direction)
         {
@@ -272,30 +339,30 @@ namespace PlugInputPack
             nd.y = -nd.y;
             Vector2 center = new Vector2(rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f);
 
-            // Background circle
-            GUI.color = new Color(0.15f, 0.15f, 0.15f, 0.5f);
+            GUI.color = CircleBg;
             GUI.DrawTexture(new Rect(rect.x - 2f, rect.y - 2f, rect.width + 4f, rect.height + 4f), _circleTexture);
             GUI.color = Color.white;
 
-            // Wire ring
-            DrawWireRing(center, rect.width * 0.45f, new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.28f));
+            DrawWireRing(center, rect.width * 0.45f, AccentDim);
 
-            // Moving dot
-            float mag      = Mathf.Clamp01(direction.magnitude);
+            float   mag    = Mathf.Clamp01(direction.magnitude);
             Vector2 dotPos = center + nd * (rect.width * 0.45f * mag);
-            float dotR     = rect.width * 0.18f * _uiScale;
+            float   dotR   = rect.width * 0.18f * _uiScale;
 
-            Miniline(center, dotPos, new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.7f), Mathf.Max(1f, 2f * _uiScale));
+            Miniline(center, dotPos, AccentLine, Mathf.Max(1f, 2f * _uiScale));
 
             GUI.color = AccentColor;
-            GUI.DrawTexture(new Rect(dotPos.x - dotR, dotPos.y - dotR, dotR * 2f, dotR * 2f), _solidTexture, ScaleMode.StretchToFill, true, 0, AccentColor, 0, dotR);
+            GUI.DrawTexture(
+                new Rect(dotPos.x - dotR, dotPos.y - dotR, dotR * 2f, dotR * 2f),
+                Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, AccentColor, 0, dotR
+            );
             GUI.color = Color.white;
         }
 
-        private void DrawWireRing(Vector2 center, float radius, Color c)
+        private static void DrawWireRing(Vector2 center, float radius, Color c)
         {
             const int segs = 20;
-            float step = 360f / segs * Mathf.Deg2Rad;
+            const float step = 2f * Mathf.PI / segs;
             for (int i = 0; i < segs; i++)
             {
                 float a1 = i * step, a2 = (i + 1) * step;
@@ -319,14 +386,11 @@ namespace PlugInputPack
             GUI.color = prev;
         }
 
-        // -------------------------------------------------------------------------
-        // Texture + style creation
-        // -------------------------------------------------------------------------
+        // ── Texture and style creation ─────────────────────────────────────────────
 
         private void CreateTextures()
         {
             _panelTexture  = CreateRoundedRect(32, 32, 8, new Color(0.11f, 0.11f, 0.13f, 0.93f));
-            _solidTexture  = Texture2D.whiteTexture;
             _circleTexture = CreateCircle(16, Color.white);
         }
 
@@ -341,14 +405,14 @@ namespace PlugInputPack
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleLeft,
                 margin    = new RectOffset(3, 3, 3, 3),
-                normal    = { textColor = new Color(0.92f, 0.92f, 0.92f, 1f) }
+                normal    = { textColor = new Color(0.92f, 0.92f, 0.92f) }
             };
             _labelStyle = new GUIStyle
             {
                 fontSize  = normalPx,
                 alignment = TextAnchor.MiddleLeft,
                 margin    = new RectOffset(3, 3, 2, 2),
-                normal    = { textColor = new Color(0.78f, 0.78f, 0.78f, 1f) }
+                normal    = { textColor = new Color(0.78f, 0.78f, 0.78f) }
             };
             _valueStyle = new GUIStyle
             {
@@ -379,29 +443,24 @@ namespace PlugInputPack
 
         private static Texture2D CreateRoundedRect(int w, int h, int r, Color c)
         {
-            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
-            {
-                filterMode = FilterMode.Bilinear
-            };
-            var px = new Color[w * h];
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            var px  = new Color[w * h];
             for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
             tex.SetPixels(px);
 
             for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
             {
-                for (int x = 0; x < w; x++)
-                {
-                    bool inCornerTL = x < r && y < r;
-                    bool inCornerTR = x >= w - r && y < r;
-                    bool inCornerBL = x < r && y >= h - r;
-                    bool inCornerBR = x >= w - r && y >= h - r;
-
-                    if (inCornerTL && Vector2.Distance(new Vector2(x, y), new Vector2(r, r))         > r) continue;
-                    if (inCornerTR && Vector2.Distance(new Vector2(x, y), new Vector2(w - r, r))     > r) continue;
-                    if (inCornerBL && Vector2.Distance(new Vector2(x, y), new Vector2(r, h - r))     > r) continue;
-                    if (inCornerBR && Vector2.Distance(new Vector2(x, y), new Vector2(w - r, h - r)) > r) continue;
-                    tex.SetPixel(x, y, c);
-                }
+                bool tl = x < r     && y < r;
+                bool tr = x >= w-r  && y < r;
+                bool bl = x < r     && y >= h-r;
+                bool br = x >= w-r  && y >= h-r;
+                float dx, dy;
+                if (tl) { dx = x - r;     dy = y - r;     if (dx*dx+dy*dy > r*r) continue; }
+                if (tr) { dx = x-(w-r);   dy = y - r;     if (dx*dx+dy*dy > r*r) continue; }
+                if (bl) { dx = x - r;     dy = y-(h-r);   if (dx*dx+dy*dy > r*r) continue; }
+                if (br) { dx = x-(w-r);   dy = y-(h-r);   if (dx*dx+dy*dy > r*r) continue; }
+                tex.SetPixel(x, y, c);
             }
             tex.Apply();
             return tex;
@@ -410,30 +469,32 @@ namespace PlugInputPack
         private static Texture2D CreateCircle(int size, Color c)
         {
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
-            float r  = size * 0.5f;
-            float r2 = r * r;
+            float r = size * 0.5f;
             for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
             {
-                for (int x = 0; x < size; x++)
-                {
-                    float dx = r - x, dy = r - y;
-                    float d2 = dx * dx + dy * dy;
-                    tex.SetPixel(x, y, d2 <= r2
-                        ? new Color(c.r, c.g, c.b, c.a * Mathf.Clamp01((r - Mathf.Sqrt(d2)) / r))
-                        : Color.clear);
-                }
+                float dx = r - x, dy = r - y;
+                float d2 = dx*dx + dy*dy;
+                tex.SetPixel(x, y, d2 <= r*r
+                    ? new Color(c.r, c.g, c.b, c.a * Mathf.Clamp01((r - Mathf.Sqrt(d2)) / r))
+                    : Color.clear);
             }
             tex.Apply();
             return tex;
         }
+
+        // ── Disposal ──────────────────────────────────────────────────────────────
 
         public void Dispose()
         {
             if (_panelTexture  != null) Object.Destroy(_panelTexture);
             if (_circleTexture != null) Object.Destroy(_circleTexture);
             _valueCache.Clear();
+            _cachedFloatVal.Clear();
+            _cachedVec2Val.Clear();
             _activeInputs.Clear();
-            _lastFrameInputs.Clear();
+            _currentFrameActive.Clear();
+            _prevFrameActive.Clear();
             _inactivityTimers.Clear();
         }
     }

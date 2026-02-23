@@ -23,15 +23,9 @@ namespace PlugInputPack
         }
 
         // ── Rich-text color palette ──────────────────────────────────────────────
-        // These render inside the Unity Console when the project uses the default
-        // rich-text log format (Project Settings → Player → Use Player Log).
-        private const string ColPrefix   = "<color=#5B9BD5><b>[PlugInput]</b></color>";   // blue-grey label
-        private const string ColAction   = "<color=#C8C8C8><b>{0}</b></color>";            // bright white name
-        private const string ColValue    = "<color=#4EC9B0>{0}</color>";                   // teal value
-        private const string ColPerform  = "<color=#6A9955>▲</color>";                    // green up-arrow  (performed)
-        private const string ColCancel   = "<color=#F44747>▼</color>";                    // red  down-arrow (canceled)
-        private const string ColDevice   = "<color=#DCDCAA>{0}</color>";                   // yellow device name
-        private const string ColSystem   = "<color=#9CDCFE>{0}</color>";                   // light-blue system msg
+        private const string ColPrefix  = "<color=#5B9BD5><b>[PlugInput]</b></color>";
+        private const string ColPerform = "<color=#6A9955>▲</color>";
+        private const string ColCancel  = "<color=#F44747>▼</color>";
 
         // ── State ────────────────────────────────────────────────────────────────
         private bool       _isEnabled;
@@ -58,6 +52,22 @@ namespace PlugInputPack
 
         public void SetEnabled(bool enabled) { _isEnabled = enabled; if (!enabled) Clear(); }
 
+        // ── Rich-text color wrappers — no AppendFormat, no params object[] alloc ──
+        // Each method wraps its string arg directly with Append calls.
+        private void AppendColored(string openTag, string closeTag, string value)
+        {
+            _sb.Append(openTag);
+            _sb.Append(value);
+            _sb.Append(closeTag);
+        }
+
+        private const string OpenAction  = "<color=#C8C8C8><b>";
+        private const string OpenValue   = "<color=#4EC9B0>";
+        private const string OpenDevice  = "<color=#DCDCAA>";
+        private const string OpenSystem  = "<color=#9CDCFE>";
+        private const string CloseColor  = "</color>";
+        private const string CloseColorB = "</b></color>";
+
         // ── Main entry point ─────────────────────────────────────────────────────
 
         /// <summary>
@@ -70,11 +80,10 @@ namespace PlugInputPack
             if (!ShouldLog(actionName, value, isPerformed))    return;
 
             _sb.Clear();
-            _sb.Append(ColPrefix);
-            _sb.Append("  ");
-            _sb.AppendFormat(ColAction, actionName);
+            _sb.Append(ColPrefix).Append("  ");
+            AppendColored(OpenAction, CloseColorB, actionName);
             _sb.Append("  <color=#555555>=</color>  ");
-            _sb.AppendFormat(ColValue, FormatValue(value));
+            AppendColored(OpenValue, CloseColor, FormatValue(value));
             _sb.Append("  ");
             _sb.Append(isPerformed ? ColPerform : ColCancel);
 
@@ -90,14 +99,14 @@ namespace PlugInputPack
             else _active.Remove(actionName);
         }
 
-        // ── System-level log helpers (called from PlugInputComponent) ────────────
+        // ── System-level log helpers ─────────────────────────────────────────────
 
         public void LogReady(int maps, int actions)
         {
             if (!_isEnabled) return;
             _sb.Clear();
             _sb.Append(ColPrefix).Append("  ");
-            _sb.AppendFormat(ColSystem, $"Ready — {maps} maps, {actions} actions");
+            _sb.Append(OpenSystem).Append("Ready — ").Append(maps).Append(" maps, ").Append(actions).Append(" actions").Append(CloseColor);
             Debug.Log(_sb.ToString());
         }
 
@@ -106,11 +115,11 @@ namespace PlugInputPack
             if (!_isEnabled) return;
             _sb.Clear();
             _sb.Append(ColPrefix).Append("  ");
-            _sb.AppendFormat(ColSystem, "Device");
+            _sb.Append(OpenSystem).Append("Device").Append(CloseColor);
             _sb.Append("  ");
-            _sb.AppendFormat(ColDevice, previous);
+            AppendColored(OpenDevice, CloseColor, previous);
             _sb.Append("  <color=#555555>→</color>  ");
-            _sb.AppendFormat(ColDevice, current);
+            AppendColored(OpenDevice, CloseColor, current);
             Debug.Log(_sb.ToString());
         }
 
@@ -119,9 +128,9 @@ namespace PlugInputPack
             if (!_isEnabled) return;
             _sb.Clear();
             _sb.Append(ColPrefix).Append("  ");
-            _sb.AppendFormat(ColSystem, verb);
+            _sb.Append(OpenSystem).Append(verb).Append(CloseColor);
             _sb.Append("  ");
-            _sb.AppendFormat(ColDevice, deviceName);
+            AppendColored(OpenDevice, CloseColor, deviceName);
             Debug.Log(_sb.ToString());
         }
 

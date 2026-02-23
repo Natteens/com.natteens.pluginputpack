@@ -5,11 +5,6 @@ using System.Collections.Generic;
 
 namespace PlugInputPack
 {
-    /// <summary>
-    /// Main component of PlugInputPack.
-    /// Bridges the Unity Input System callbacks, the InputState cache, and the public API.
-    /// All hot paths are zero-alloc — no boxing, no per-frame heap allocation.
-    /// </summary>
     public class PlugInputComponent : MonoBehaviour
     {
         [SerializeField]
@@ -25,24 +20,30 @@ namespace PlugInputPack
         private bool _originalCursorVisible;
         private bool _hasManualOverride;
 
-        // Typed last-value storage — no boxing, no object dictionary
-        private Dictionary<string, InputValue> _lastValues = new Dictionary<string, InputValue>();
+        private readonly Dictionary<string, InputValue> _lastValues = new();
+
+        public delegate void InputPerformedHandler(string actionName, InputValue value);
+        public delegate void InputFloatHandler(string actionName, float value);
+        public delegate void InputVector2Handler(string actionName, Vector2 value);
+        public delegate void InputBoolHandler(string actionName, bool value);
+        public delegate void DeviceChangedHandler(PlugInputDeviceManager.DeviceType previous, PlugInputDeviceManager.DeviceType current);
+        public delegate void DeviceTypeHandler(PlugInputDeviceManager.DeviceType deviceType);
 
         // --- Events ---
-        public static event Action<string, InputValue> OnInputPerformed;
-        public static event Action<string> OnInputCanceled;
-        public static event Action<string> OnInputPressed;
-        public static event Action<string> OnInputReleased;
-        public static event Action<string, float>   OnInputValueChanged;
-        public static event Action<string, Vector2> OnInputVector2Changed;
-        public static event Action<string, bool>    OnInputStateChanged;
-        public static event Action OnInputSystemInitialized;
-        public static event Action OnInputSystemDestroyed;
+        public static event InputPerformedHandler               OnInputPerformed;
+        public static event Action<string>                      OnInputCanceled;
+        public static event Action<string>                      OnInputPressed;
+        public static event Action<string>                      OnInputReleased;
+        public static event InputFloatHandler                   OnInputValueChanged;
+        public static event InputVector2Handler                 OnInputVector2Changed;
+        public static event InputBoolHandler                    OnInputStateChanged;
+        public static event Action                              OnInputSystemInitialized;
+        public static event Action                              OnInputSystemDestroyed;
 
-        public static event Action<PlugInputDeviceManager.DeviceType, PlugInputDeviceManager.DeviceType> OnDeviceChanged;
-        public static event Action<InputDevice> OnDeviceConnected;
-        public static event Action<InputDevice> OnDeviceDisconnected;
-        public static event Action<PlugInputDeviceManager.DeviceType> OnDeviceFiltered;
+        public static event DeviceChangedHandler                OnDeviceChanged;
+        public static event Action<InputDevice>                 OnDeviceConnected;
+        public static event Action<InputDevice>                 OnDeviceDisconnected;
+        public static event DeviceTypeHandler                   OnDeviceFiltered;
 
         // --- Public properties ---
         public PlugInputDeviceManager DeviceManager  => _deviceManager;
@@ -82,6 +83,7 @@ namespace PlugInputPack
             _debugger.SetEnabled(inputReader.EnableDebug);
             _visualizer.Initialize(inputReader.EnableVisualDebug, inputReader.DebugHandleSize / 100f, inputReader.DebugHandleColor);
             _deviceManager.Initialize(inputReader.EnableDeviceManagement, inputReader.StrictDeviceIsolation, inputReader.DeviceSwitchCooldown, inputReader.AllowedDevices);
+            _deviceManager.CacheLookActionNames(actionAsset); 
 
             SetupDeviceEvents();
             RegisterAllInputs(actionAsset);
@@ -135,7 +137,6 @@ namespace PlugInputPack
 
             OnInputSystemDestroyed?.Invoke();
 
-            // Clear static events so they don't leak across scene loads
             OnInputPerformed          = null;
             OnInputCanceled           = null;
             OnInputPressed            = null;
@@ -248,10 +249,15 @@ namespace PlugInputPack
             PlugInputDeviceManager.OnDeviceTypeFiltered += HandleDeviceFiltered;
         }
 
+        // Pre-built enum name table — avoids Enum.ToString() allocation on hot paths
+        private static readonly string[] s_deviceTypeNames =
+            { "Unknown", "Keyboard", "Mouse", "Gamepad", "Touch", "Joystick", "XRController" };
+        private static string DeviceName(PlugInputDeviceManager.DeviceType t) => s_deviceTypeNames[(int)t];
+
         private void HandleDeviceChanged(PlugInputDeviceManager.DeviceType previous, PlugInputDeviceManager.DeviceType current)
         {
             if (inputReader.EnableDebug)
-                _debugger.LogDeviceChanged(previous.ToString(), current.ToString());
+                _debugger.LogDeviceChanged(DeviceName(previous), DeviceName(current));
 
             if (!_hasManualOverride && inputReader.AutoLockCursorOnGamepad)
             {
@@ -278,7 +284,7 @@ namespace PlugInputPack
 
         private void HandleDeviceFiltered(PlugInputDeviceManager.DeviceType deviceType)
         {
-            if (inputReader.EnableDebug) _debugger.LogDeviceEvent("Device filtered", deviceType.ToString());
+            if (inputReader.EnableDebug) _debugger.LogDeviceEvent("Device filtered", DeviceName(deviceType));
             OnDeviceFiltered?.Invoke(deviceType);
         }
 
