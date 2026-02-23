@@ -1,3 +1,10 @@
+## [2.1.3](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.1.2...v2.1.3) (2026-02-23)
+
+
+### Bug Fixes
+
+* Optimize input cache, device manager, and UI ([63b062e](https://github.com/Natteens/com.natteens.pluginputpack/commit/63b062e9d0fbc9af3f68fc1274928fd53522e513))
+
 ## [2.1.2](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.1.1...v2.1.2) (2026-02-22)
 
 
