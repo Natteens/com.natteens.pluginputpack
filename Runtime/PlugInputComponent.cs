@@ -29,21 +29,23 @@ namespace PlugInputPack
         public delegate void DeviceChangedHandler(PlugInputDeviceManager.DeviceType previous, PlugInputDeviceManager.DeviceType current);
         public delegate void DeviceTypeHandler(PlugInputDeviceManager.DeviceType deviceType);
 
-        // --- Events ---
-        public static event InputPerformedHandler               OnInputPerformed;
-        public static event Action<string>                      OnInputCanceled;
-        public static event Action<string>                      OnInputPressed;
-        public static event Action<string>                      OnInputReleased;
-        public static event InputFloatHandler                   OnInputValueChanged;
-        public static event InputVector2Handler                 OnInputVector2Changed;
-        public static event InputBoolHandler                    OnInputStateChanged;
-        public static event Action                              OnInputSystemInitialized;
-        public static event Action                              OnInputSystemDestroyed;
+        // --- Instance events ---
+        // Non-static so multiple instances don't bleed into each other,
+        // and OnDestroy doesn't nuke subscribers belonging to other objects.
+        public event InputPerformedHandler  OnInputPerformed;
+        public event Action<string>         OnInputCanceled;
+        public event Action<string>         OnInputPressed;
+        public event Action<string>         OnInputReleased;
+        public event InputFloatHandler      OnInputValueChanged;
+        public event InputVector2Handler    OnInputVector2Changed;
+        public event InputBoolHandler       OnInputStateChanged;
+        public event Action                 OnInputSystemInitialized;
+        public event Action                 OnInputSystemDestroyed;
 
-        public static event DeviceChangedHandler                OnDeviceChanged;
-        public static event Action<InputDevice>                 OnDeviceConnected;
-        public static event Action<InputDevice>                 OnDeviceDisconnected;
-        public static event DeviceTypeHandler                   OnDeviceFiltered;
+        public event DeviceChangedHandler   OnDeviceChanged;
+        public event Action<InputDevice>    OnDeviceConnected;
+        public event Action<InputDevice>    OnDeviceDisconnected;
+        public event DeviceTypeHandler      OnDeviceFiltered;
 
         // --- Public properties ---
         public PlugInputDeviceManager DeviceManager  => _deviceManager;
@@ -83,7 +85,7 @@ namespace PlugInputPack
             _debugger.SetEnabled(inputReader.EnableDebug);
             _visualizer.Initialize(inputReader.EnableVisualDebug, inputReader.DebugHandleSize / 100f, inputReader.DebugHandleColor);
             _deviceManager.Initialize(inputReader.EnableDeviceManagement, inputReader.StrictDeviceIsolation, inputReader.DeviceSwitchCooldown, inputReader.AllowedDevices);
-            _deviceManager.CacheLookActionNames(actionAsset); 
+            _deviceManager.CacheLookActionNames(actionAsset);
 
             SetupDeviceEvents();
             RegisterAllInputs(actionAsset);
@@ -114,9 +116,29 @@ namespace PlugInputPack
                 _debugger.LogReady(actionAsset.actionMaps.Count, total);
         }
 
-        private void LateUpdate()
+        private void Update()
         {
-            _cache?.UpdateStates();
+            // Flush must happen in Update so that PressedThisFrame/ReleasedThisFrame are valid
+            // for the entire frame, including any FixedUpdate calls that occur within it.
+            // FlushStates returns which actions had a press or release this frame —
+            // events are fired here, after the flush, so they reflect the correct state.
+            var flushResults = _cache.FlushStates();
+            for (int i = 0; i < flushResults.Count; i++)
+            {
+                var (state, pressed, released) = flushResults[i];
+                if (pressed)
+                {
+                    OnInputPressed?.Invoke(state.Name);
+                    if (inputReader.EnableDebug)
+                        _debugger.LogInputActivity(state.Name, state.CurrentValue, true);
+                }
+                if (released)
+                {
+                    OnInputReleased?.Invoke(state.Name);
+                    if (inputReader.EnableDebug)
+                        _debugger.LogInputActivity(state.Name, state.CurrentValue, false);
+                }
+            }
         }
 
         private void OnGUI()
@@ -130,26 +152,12 @@ namespace PlugInputPack
             Cursor.lockState = _originalCursorLockMode;
             Cursor.visible   = _originalCursorVisible;
 
-            PlugInputDeviceManager.OnDeviceChanged     -= HandleDeviceChanged;
-            PlugInputDeviceManager.OnDeviceConnected   -= HandleDeviceConnected;
+            PlugInputDeviceManager.OnDeviceChanged      -= HandleDeviceChanged;
+            PlugInputDeviceManager.OnDeviceConnected    -= HandleDeviceConnected;
             PlugInputDeviceManager.OnDeviceDisconnected -= HandleDeviceDisconnected;
             PlugInputDeviceManager.OnDeviceTypeFiltered -= HandleDeviceFiltered;
 
             OnInputSystemDestroyed?.Invoke();
-
-            OnInputPerformed          = null;
-            OnInputCanceled           = null;
-            OnInputPressed            = null;
-            OnInputReleased           = null;
-            OnInputValueChanged       = null;
-            OnInputVector2Changed     = null;
-            OnInputStateChanged       = null;
-            OnInputSystemInitialized  = null;
-            OnInputSystemDestroyed    = null;
-            OnDeviceChanged           = null;
-            OnDeviceConnected         = null;
-            OnDeviceDisconnected      = null;
-            OnDeviceFiltered          = null;
 
             if (inputReader?.InputActionAsset != null)
             {
@@ -168,7 +176,9 @@ namespace PlugInputPack
         }
 
         // -------------------------------------------------------------------------
-        // Input callbacks
+        // Input callbacks (fired by Input System — before flush)
+        // Only continuous value events are fired here; press/release events
+        // are fired in Update after the flush so timing is correct.
         // -------------------------------------------------------------------------
 
         private void OnActionPerformed(InputAction.CallbackContext context)
@@ -181,14 +191,7 @@ namespace PlugInputPack
             if (state == null) return;
 
             OnInputPerformed?.Invoke(actionName, state.CurrentValue);
-
-            if (state.PressedThisFrame)
-                OnInputPressed?.Invoke(actionName);
-
             FireValueChangedEvents(actionName, state);
-
-            if (inputReader.EnableDebug)
-                _debugger.LogInputActivity(actionName, state.CurrentValue, true);
         }
 
         private void OnActionCanceled(InputAction.CallbackContext context)
@@ -201,14 +204,7 @@ namespace PlugInputPack
             if (state == null) return;
 
             OnInputCanceled?.Invoke(actionName);
-
-            if (state.ReleasedThisFrame)
-                OnInputReleased?.Invoke(actionName);
-
             FireValueChangedEvents(actionName, state);
-
-            if (inputReader.EnableDebug)
-                _debugger.LogInputActivity(actionName, state.CurrentValue, false);
         }
 
         /// <summary>
@@ -243,13 +239,12 @@ namespace PlugInputPack
 
         private void SetupDeviceEvents()
         {
-            PlugInputDeviceManager.OnDeviceChanged     += HandleDeviceChanged;
-            PlugInputDeviceManager.OnDeviceConnected   += HandleDeviceConnected;
+            PlugInputDeviceManager.OnDeviceChanged      += HandleDeviceChanged;
+            PlugInputDeviceManager.OnDeviceConnected    += HandleDeviceConnected;
             PlugInputDeviceManager.OnDeviceDisconnected += HandleDeviceDisconnected;
             PlugInputDeviceManager.OnDeviceTypeFiltered += HandleDeviceFiltered;
         }
 
-        // Pre-built enum name table — avoids Enum.ToString() allocation on hot paths
         private static readonly string[] s_deviceTypeNames =
             { "Unknown", "Keyboard", "Mouse", "Gamepad", "Touch", "Joystick", "XRController" };
         private static string DeviceName(PlugInputDeviceManager.DeviceType t) => s_deviceTypeNames[(int)t];
@@ -297,18 +292,18 @@ namespace PlugInputPack
 
         public void LockCursor()
         {
-            _cursorLocked    = true;
+            _cursorLocked      = true;
             _hasManualOverride = true;
-            Cursor.visible   = false;
-            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible     = false;
+            Cursor.lockState   = CursorLockMode.Locked;
         }
 
         public void UnlockCursor()
         {
-            _cursorLocked    = false;
+            _cursorLocked      = false;
             _hasManualOverride = true;
-            Cursor.visible   = true;
-            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible     = true;
+            Cursor.lockState   = CursorLockMode.None;
         }
 
         public void ResetCursorBehavior()

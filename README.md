@@ -117,40 +117,43 @@ public class PlayerController : MonoBehaviour
 
 ### Input Event System
 
+Events are instance-based — subscribe via a reference to the `PlugInputComponent`, not the class itself.
+
 ```csharp
 using UnityEngine;
 using PlugInputPack;
 
 public class InputEventHandler : MonoBehaviour
 {
+    [SerializeField] private PlugInputComponent input;
+
     void OnEnable()
     {
-        PlugInputComponent.OnInputPerformed += HandleInputPerformed;
-        PlugInputComponent.OnInputCanceled += HandleInputCanceled;
-        PlugInputComponent.OnInputPressed += HandleInputPressed;
-        PlugInputComponent.OnInputReleased += HandleInputReleased;
-        PlugInputComponent.OnInputValueChanged += HandleFloatChange;
-        PlugInputComponent.OnInputVector2Changed += HandleVector2Change;
-        PlugInputComponent.OnInputStateChanged += HandleBoolChange;
-        PlugInputComponent.OnInputSystemInitialized += HandleSystemInit;
-        PlugInputComponent.OnInputSystemDestroyed += HandleSystemDestroy;
+        input.OnInputPerformed += HandleInputPerformed;
+        input.OnInputCanceled += HandleInputCanceled;
+        input.OnInputPressed += HandleInputPressed;
+        input.OnInputReleased += HandleInputReleased;
+        input.OnInputValueChanged += HandleFloatChange;
+        input.OnInputVector2Changed += HandleVector2Change;
+        input.OnInputStateChanged += HandleBoolChange;
+        input.OnInputSystemInitialized += HandleSystemInit;
+        input.OnInputSystemDestroyed += HandleSystemDestroy;
     }
     
     void OnDisable()
     {
-        // Always remove listeners!
-        PlugInputComponent.OnInputPerformed -= HandleInputPerformed;
-        PlugInputComponent.OnInputCanceled -= HandleInputCanceled;
-        PlugInputComponent.OnInputPressed -= HandleInputPressed;
-        PlugInputComponent.OnInputReleased -= HandleInputReleased;
-        PlugInputComponent.OnInputValueChanged -= HandleFloatChange;
-        PlugInputComponent.OnInputVector2Changed -= HandleVector2Change;
-        PlugInputComponent.OnInputStateChanged -= HandleBoolChange;
-        PlugInputComponent.OnInputSystemInitialized -= HandleSystemInit;
-        PlugInputComponent.OnInputSystemDestroyed -= HandleSystemDestroy;
+        input.OnInputPerformed -= HandleInputPerformed;
+        input.OnInputCanceled -= HandleInputCanceled;
+        input.OnInputPressed -= HandleInputPressed;
+        input.OnInputReleased -= HandleInputReleased;
+        input.OnInputValueChanged -= HandleFloatChange;
+        input.OnInputVector2Changed -= HandleVector2Change;
+        input.OnInputStateChanged -= HandleBoolChange;
+        input.OnInputSystemInitialized -= HandleSystemInit;
+        input.OnInputSystemDestroyed -= HandleSystemDestroy;
     }
     
-    void HandleInputPerformed(string actionName, object value)
+    void HandleInputPerformed(string actionName, InputValue value)
         => Debug.Log($"Input {actionName} performed: {value}");
     
     void HandleInputPressed(string actionName)
@@ -195,18 +198,18 @@ public class DeviceHandler : MonoBehaviour
 
     void OnEnable()
     {
-        PlugInputComponent.OnDeviceChanged += HandleDeviceChanged;
-        PlugInputComponent.OnDeviceConnected += HandleDeviceConnected;
-        PlugInputComponent.OnDeviceDisconnected += HandleDeviceDisconnected;
-        PlugInputComponent.OnDeviceFiltered += HandleDeviceFiltered;
+        input.OnDeviceChanged += HandleDeviceChanged;
+        input.OnDeviceConnected += HandleDeviceConnected;
+        input.OnDeviceDisconnected += HandleDeviceDisconnected;
+        input.OnDeviceFiltered += HandleDeviceFiltered;
     }
 
     void OnDisable()
     {
-        PlugInputComponent.OnDeviceChanged -= HandleDeviceChanged;
-        PlugInputComponent.OnDeviceConnected -= HandleDeviceConnected;
-        PlugInputComponent.OnDeviceDisconnected -= HandleDeviceDisconnected;
-        PlugInputComponent.OnDeviceFiltered -= HandleDeviceFiltered;
+        input.OnDeviceChanged -= HandleDeviceChanged;
+        input.OnDeviceConnected -= HandleDeviceConnected;
+        input.OnDeviceDisconnected -= HandleDeviceDisconnected;
+        input.OnDeviceFiltered -= HandleDeviceFiltered;
     }
 
     void HandleDeviceChanged(PlugInputDeviceManager.DeviceType previous, PlugInputDeviceManager.DeviceType current)
@@ -311,9 +314,14 @@ input["Move"].Bool
 input["Move"].Int
 
 // Frame states
-input["Jump"].Pressed      // Pressed THIS frame
-input["Jump"].Released     // Released THIS frame
+input["Jump"].Pressed      // Pressed THIS frame — use in Update
+input["Jump"].Released     // Released THIS frame — use in Update
 input["Jump"].IsPressed    // Currently held
+
+// FixedUpdate-safe consume methods
+// Return true exactly once per event regardless of how many FixedUpdate calls occur in the frame
+input["Jump"].ConsumePressedPending()
+input["Jump"].ConsumeReleasedPending()
 
 // Validity
 input["Jump"].IsValid

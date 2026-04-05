@@ -20,6 +20,11 @@ namespace PlugInputPack
         private bool _pressedThisFrameBuffer;
         private bool _releasedThisFrameBuffer;
 
+        // Persistent flags for FixedUpdate consumers.
+        // Unlike PressedThisFrame (cleared next flush), these stay true until explicitly consumed.
+        private bool _pressedPending;
+        private bool _releasedPending;
+
         public InputState(InputAction action)
         {
             _action = action;
@@ -37,7 +42,10 @@ namespace PlugInputPack
             _currentValue = PlugInputProcessor.ReadValue(context, _inputType);
 
             if (_currentValue.IsActive() && !_previousValue.IsActive())
+            {
                 _pressedThisFrameBuffer = true;
+                _pressedPending = true;
+            }
         }
 
         private void OnActionCanceled(InputAction.CallbackContext context)
@@ -46,18 +54,47 @@ namespace PlugInputPack
             _currentValue = PlugInputProcessor.GetDefaultValue(_inputType);
 
             if (!_currentValue.IsActive() && _previousValue.IsActive())
+            {
                 _releasedThisFrameBuffer = true;
+                _releasedPending = true;
+            }
         }
 
         /// <summary>
-        /// Flushes the per-frame pressed/released buffers. Called from LateUpdate.
+        /// Flushes the per-frame pressed/released buffers.
+        /// Must be called from Update (not LateUpdate) so that Pressed/Released
+        /// are valid for the entire frame, including FixedUpdate calls within it.
+        /// Returns whether a press or release occurred this frame so callers can fire events.
         /// </summary>
-        public void Update()
+        public (bool pressed, bool released) Flush()
         {
             _pressedThisFrame = _pressedThisFrameBuffer;
             _releasedThisFrame = _releasedThisFrameBuffer;
             _pressedThisFrameBuffer = false;
             _releasedThisFrameBuffer = false;
+            return (_pressedThisFrame, _releasedThisFrame);
+        }
+
+        /// <summary>
+        /// Consumes the pending pressed flag. Returns true once per press event.
+        /// Safe to call from FixedUpdate — survives until explicitly consumed.
+        /// </summary>
+        public bool ConsumePressedPending()
+        {
+            if (!_pressedPending) return false;
+            _pressedPending = false;
+            return true;
+        }
+
+        /// <summary>
+        /// Consumes the pending released flag. Returns true once per release event.
+        /// Safe to call from FixedUpdate — survives until explicitly consumed.
+        /// </summary>
+        public bool ConsumeReleasedPending()
+        {
+            if (!_releasedPending) return false;
+            _releasedPending = false;
+            return true;
         }
 
         public void Dispose()
@@ -71,9 +108,9 @@ namespace PlugInputPack
         public string InputType => _inputType;
 
         // --- State ---
-        public bool IsPressed        => _currentValue.IsActive();
-        public bool PressedThisFrame => _pressedThisFrame;
-        public bool ReleasedThisFrame=> _releasedThisFrame;
+        public bool IsPressed         => _currentValue.IsActive();
+        public bool PressedThisFrame  => _pressedThisFrame;
+        public bool ReleasedThisFrame => _releasedThisFrame;
 
         // --- Typed accessors (no alloc) ---
         public bool    AsBool    => _currentValue.AsBool();

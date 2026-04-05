@@ -46,9 +46,37 @@ namespace PlugInputPack
 
         // --- Frame states ---
 
+        /// <summary>True during the frame the button was pressed. Valid in Update and FixedUpdate within that frame.</summary>
         public bool Pressed   { get { CheckDisposed(); return _state?.PressedThisFrame  ?? false; } }
+
+        /// <summary>True during the frame the button was released. Valid in Update and FixedUpdate within that frame.</summary>
         public bool Released  { get { CheckDisposed(); return _state?.ReleasedThisFrame ?? false; } }
+
         public bool IsPressed { get { CheckDisposed(); return _state?.IsPressed         ?? false; } }
+
+        // --- Consume methods for FixedUpdate ---
+
+        /// <summary>
+        /// Consumes and returns a pending press event. Returns true exactly once per press,
+        /// regardless of how many FixedUpdate calls happen in the same frame.
+        /// Use this instead of Pressed when reading input from FixedUpdate.
+        /// </summary>
+        public bool ConsumePressedPending()
+        {
+            CheckDisposed();
+            return _state?.ConsumePressedPending() ?? false;
+        }
+
+        /// <summary>
+        /// Consumes and returns a pending release event. Returns true exactly once per release,
+        /// regardless of how many FixedUpdate calls happen in the same frame.
+        /// Use this instead of Released when reading input from FixedUpdate.
+        /// </summary>
+        public bool ConsumeReleasedPending()
+        {
+            CheckDisposed();
+            return _state?.ConsumeReleasedPending() ?? false;
+        }
 
         // --- Implicit conversions (no alloc) ---
 

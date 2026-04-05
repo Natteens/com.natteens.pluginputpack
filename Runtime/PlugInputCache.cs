@@ -9,12 +9,16 @@ namespace PlugInputPack
     public class PlugInputCache
     {
         private readonly Dictionary<string, InputState> _stateMap  = new Dictionary<string, InputState>();
-        private readonly List<InputState>               _stateList = new List<InputState>(); // parallel — used for zero-alloc iteration
+        private readonly List<InputState>               _stateList = new List<InputState>();
 
-        private readonly Dictionary<string, InputAccessor> _accessors   = new Dictionary<string, InputAccessor>();
+        private readonly Dictionary<string, InputAccessor> _accessors    = new Dictionary<string, InputAccessor>();
         private readonly Stack<InputAccessor>              _accessorPool = new Stack<InputAccessor>();
 
-        // ── Registration ─────────────────────────────────────────────────────────
+        // Reused each flush to report which actions had press/release this frame — zero alloc.
+        private readonly List<(InputState state, bool pressed, bool released)> _flushResults
+            = new List<(InputState, bool, bool)>();
+
+        // ── Registration ──────────────────────────────────────────────────────────
 
         public void RegisterState(InputAction action)
         {
@@ -28,7 +32,7 @@ namespace PlugInputPack
             {
                 var state = new InputState(action);
                 _stateMap[action.name] = state;
-                _stateList.Add(state);   // keep list in sync
+                _stateList.Add(state);
             }
         }
 
@@ -72,17 +76,24 @@ namespace PlugInputPack
             _accessorPool.Push(accessor);
         }
 
-        // ── Per-frame update (called from LateUpdate) ─────────────────────────────
+        // ── Per-frame flush (must be called from Update, not LateUpdate) ──────────
 
         /// <summary>
         /// Flushes pressed/released buffers for every registered state.
-        /// Uses List iteration — struct enumerator, zero heap allocation.
+        /// Returns a list of states that had a press or release this frame,
+        /// so PlugInputComponent can fire events after the flush — not before.
+        /// The returned list is reused each call; do not store it.
         /// </summary>
-        public void UpdateStates()
+        public List<(InputState state, bool pressed, bool released)> FlushStates()
         {
-            // List<T>.Enumerator is a struct — no allocation on Mono or IL2CPP
+            _flushResults.Clear();
             for (int i = 0; i < _stateList.Count; i++)
-                _stateList[i].Update();
+            {
+                var (pressed, released) = _stateList[i].Flush();
+                if (pressed || released)
+                    _flushResults.Add((_stateList[i], pressed, released));
+            }
+            return _flushResults;
         }
 
         // ── Queries ───────────────────────────────────────────────────────────────
@@ -118,6 +129,7 @@ namespace PlugInputPack
             _stateList.Clear();
             _accessors.Clear();
             _accessorPool.Clear();
+            _flushResults.Clear();
         }
     }
 }
