@@ -1,3 +1,10 @@
+## [2.1.4](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.1.3...v2.1.4) (2026-04-05)
+
+
+### Bug Fixes
+
+* Make press/release events FixedUpdate-safe ([175d27d](https://github.com/Natteens/com.natteens.pluginputpack/commit/175d27d4c7cb15f8c434528bf1b0dfcd49281809))
+
 ## [2.1.3](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.1.2...v2.1.3) (2026-02-23)
 
 
