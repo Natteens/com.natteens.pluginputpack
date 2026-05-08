@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.1.4...v2.2.0) (2026-05-08)
+
+
+### Features
+
+* Refactor input runtime and editor UI ([1221f75](https://github.com/Natteens/com.natteens.pluginputpack/commit/1221f753e3b9c3785ca46723f99021ad33cf6bf8))
+
 ## [2.1.4](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.1.3...v2.1.4) (2026-04-05)
 
 
