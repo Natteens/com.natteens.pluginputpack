@@ -1,3 +1,13 @@
+## [2.2.1](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.2.0...v2.2.1) (2026-05-08)
+
+
+### Bug Fixes
+
+* align InputActionAsset enable-disable with component lifecycle ([5c0e44f](https://github.com/Natteens/com.natteens.pluginputpack/commit/5c0e44f0783fc6bad5f2146dc93c7cac9da00c9f))
+* guard input lifecycle subscriptions by initialization state ([3bea5e1](https://github.com/Natteens/com.natteens.pluginputpack/commit/3bea5e1c6f7396951bde7c40c58883a9570d5b00))
+* make input event unsubscribe state-reset safe ([15bca86](https://github.com/Natteens/com.natteens.pluginputpack/commit/15bca86b74c78cf625db234099e1fd819f9bf5ac))
+* Merge pull request [#1](https://github.com/Natteens/com.natteens.pluginputpack/issues/1) from Natteens/copilot/fix-input-system-event-lifecycle ([2bc4486](https://github.com/Natteens/com.natteens.pluginputpack/commit/2bc44864b15ff0d8b244ec332bd27114d72055cd))
+
 # [2.2.0](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.1.4...v2.2.0) (2026-05-08)
 
 
