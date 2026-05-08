@@ -21,6 +21,8 @@ namespace PlugInputPack
         private bool           _inputEventsSubscribed;
         private bool           _inputSystemInitialized;
 
+        private InputActionAsset _runtimeAsset; // Instância isolada
+
         private readonly Dictionary<string, InputValue> _lastValues = new();
 
         public delegate void InputPerformedHandler(string actionName, InputValue value);
@@ -68,37 +70,33 @@ namespace PlugInputPack
 
         private void OnEnable()
         {
-            if (!_inputSystemInitialized) return;
+            if (!_inputSystemInitialized || _runtimeAsset == null) return;
 
-            var actionAsset = inputReader?.InputActionAsset;
-            if (actionAsset == null) return;
-
-            SubscribeInputEvents(actionAsset);
-            actionAsset.Enable();
+            SubscribeInputEvents(_runtimeAsset);
+            _runtimeAsset.Enable();
         }
 
         private void OnDisable()
         {
-            if (!_inputSystemInitialized) return;
+            if (!_inputSystemInitialized || _runtimeAsset == null) return;
 
-            var actionAsset = inputReader?.InputActionAsset;
-            if (actionAsset == null) return;
-
-            actionAsset.Disable();
-            UnsubscribeInputEvents(actionAsset);
+            _runtimeAsset.Disable();
+            UnsubscribeInputEvents(_runtimeAsset);
         }
 
         private void InitializeInputSystem()
         {
-            var actionAsset = inputReader.InputActionAsset;
-            if (actionAsset == null) { Debug.LogError("[PlugInput] InputActionAsset is null."); return; }
+            if (inputReader.InputActionAsset == null) { Debug.LogError("[PlugInput] InputActionAsset is null."); return; }
+
+            // Instancia uma cópia para isolar o estado desta cena/componente
+            _runtimeAsset = Instantiate(inputReader.InputActionAsset);
 
             _debugger.SetEnabled(inputReader.EnableDebug);
             _visualizer.Initialize(inputReader.EnableVisualDebug, inputReader.DebugHandleSize / 100f, inputReader.DebugHandleColor);
             _deviceManager.Initialize(inputReader.EnableDeviceManagement, inputReader.DeviceSwitchCooldown);
 
             SetupDeviceEvents();
-            RegisterAllInputs(actionAsset);
+            RegisterAllInputs(_runtimeAsset);
 
             if (inputReader.LockCursorOnStart) LockCursor(); else UnlockCursor();
 
@@ -157,13 +155,19 @@ namespace PlugInputPack
 
             OnInputSystemDestroyed?.Invoke();
 
-            UnsubscribeInputEvents(inputReader?.InputActionAsset);
+            UnsubscribeInputEvents(_runtimeAsset);
 
             _lastValues?.Clear();
             _cache?.Dispose();
             _debugger?.Clear();
             _deviceManager?.Dispose();
             _inputSystemInitialized = false;
+
+            // Destrói a instância isolada para evitar vazamento de memória
+            if (_runtimeAsset != null)
+            {
+                Destroy(_runtimeAsset);
+            }
         }
 
         private void SubscribeInputEvents(InputActionAsset actionAsset)
