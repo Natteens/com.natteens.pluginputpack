@@ -3,40 +3,16 @@ using System;
 
 namespace PlugInputPack
 {
-    /// <summary>
-    /// Provides a clean API to access a single input's current state.
-    /// Reads directly from InputState's typed properties — zero boxing, zero allocation.
-    /// Instances are pooled by PlugInputCache and reused across frames.
-    /// </summary>
     public class InputAccessor : IDisposable
     {
         private InputState _state;
         private bool _isDisposed;
 
-        public InputAccessor(InputState state)
-        {
-            Initialize(state);
-        }
-
-        public void Initialize(InputState state)
-        {
-            _state = state;
-            _isDisposed = false;
-        }
-
-        public void Reset()
-        {
-            _state = null;
-            _isDisposed = false;
-        }
-
-        // --- Identity ---
+        public InputAccessor(InputState state) { _state = state; }
 
         public string Name      => _state?.Name      ?? string.Empty;
         public string InputType => _state?.InputType ?? string.Empty;
         public bool   IsValid   => !_isDisposed && _state != null;
-
-        // --- Typed properties (no alloc) ---
 
         public Vector2 Vector2  { get { CheckDisposed(); return _state?.AsVector2 ?? Vector2.zero; } }
         public Vector3 Vector3  { get { CheckDisposed(); return _state?.AsVector3 ?? Vector3.zero; } }
@@ -44,41 +20,20 @@ namespace PlugInputPack
         public bool    Bool     { get { CheckDisposed(); return _state?.AsBool    ?? false; } }
         public int     Int      { get { CheckDisposed(); return _state?.AsInt     ?? 0; } }
 
-        // --- Frame states ---
+        /// <summary>True no frame em que o botão foi pressionado. Use em Update.</summary>
+        public bool JustPressed  { get { CheckDisposed(); return _state?.PressedThisFrame  ?? false; } }
 
-        /// <summary>True during the frame the button was pressed. Valid in Update and FixedUpdate within that frame.</summary>
-        public bool Pressed   { get { CheckDisposed(); return _state?.PressedThisFrame  ?? false; } }
+        /// <summary>True no frame em que o botão foi solto. Use em Update.</summary>
+        public bool JustReleased { get { CheckDisposed(); return _state?.ReleasedThisFrame ?? false; } }
 
-        /// <summary>True during the frame the button was released. Valid in Update and FixedUpdate within that frame.</summary>
-        public bool Released  { get { CheckDisposed(); return _state?.ReleasedThisFrame ?? false; } }
+        /// <summary>True enquanto o botão está segurado.</summary>
+        public bool IsHeld       { get { CheckDisposed(); return _state?.IsPressed         ?? false; } }
 
-        public bool IsPressed { get { CheckDisposed(); return _state?.IsPressed         ?? false; } }
+        /// <summary>Consome um press pendente. Retorna true uma vez por press. Use em FixedUpdate.</summary>
+        public bool TakePress()   { CheckDisposed(); return _state?.TakePress()   ?? false; }
 
-        // --- Consume methods for FixedUpdate ---
-
-        /// <summary>
-        /// Consumes and returns a pending press event. Returns true exactly once per press,
-        /// regardless of how many FixedUpdate calls happen in the same frame.
-        /// Use this instead of Pressed when reading input from FixedUpdate.
-        /// </summary>
-        public bool ConsumePressedPending()
-        {
-            CheckDisposed();
-            return _state?.ConsumePressedPending() ?? false;
-        }
-
-        /// <summary>
-        /// Consumes and returns a pending release event. Returns true exactly once per release,
-        /// regardless of how many FixedUpdate calls happen in the same frame.
-        /// Use this instead of Released when reading input from FixedUpdate.
-        /// </summary>
-        public bool ConsumeReleasedPending()
-        {
-            CheckDisposed();
-            return _state?.ConsumeReleasedPending() ?? false;
-        }
-
-        // --- Implicit conversions (no alloc) ---
+        /// <summary>Consome um release pendente. Retorna true uma vez por release. Use em FixedUpdate.</summary>
+        public bool TakeRelease() { CheckDisposed(); return _state?.TakeRelease() ?? false; }
 
         public static implicit operator Vector2(InputAccessor a) => (a == null || a._isDisposed || a._state == null) ? Vector2.zero : a._state.AsVector2;
         public static implicit operator Vector3(InputAccessor a) => (a == null || a._isDisposed || a._state == null) ? Vector3.zero : a._state.AsVector3;
@@ -86,24 +41,14 @@ namespace PlugInputPack
         public static implicit operator bool   (InputAccessor a) => a is { _isDisposed: false, _state: { AsBool: true } };
         public static implicit operator int    (InputAccessor a) => (a == null || a._isDisposed || a._state == null) ? 0 : a._state.AsInt;
 
-        // --- Debug (alloc acceptable — only called from debug paths) ---
-
-        /// <summary>Returns the underlying InputValue for debug display. Avoid calling every frame in production.</summary>
+        /// <summary>Apenas para debug — aloca string.</summary>
         public InputValue RawValue { get { CheckDisposed(); return _state?.CurrentValue ?? default; } }
 
-        private void CheckDisposed()
-        {
-            if (_isDisposed)
-                throw new ObjectDisposedException(nameof(InputAccessor));
-        }
+        private void CheckDisposed() { if (_isDisposed) throw new ObjectDisposedException(nameof(InputAccessor)); }
 
         public void Dispose()
         {
-            if (!_isDisposed)
-            {
-                _state = null;
-                _isDisposed = true;
-            }
+            if (!_isDisposed) { _state = null; _isDisposed = true; }
         }
     }
 }

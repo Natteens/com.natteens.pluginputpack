@@ -1,7 +1,7 @@
 # Plug Input Pack
 
-[![Unity Version](https://img.shields.io/badge/Unity-2022.3%2B-blue.svg)](https://unity3d.com/get-unity/download)
-[![Input System](https://img.shields.io/badge/Input%20System-2.0.6%2B-green.svg)](https://docs.unity3d.com/Packages/com.unity.inputsystem@1.4/manual/index.html)
+[![Unity Version](https://img.shields.io/badge/Unity-6000.1%2B-blue.svg)](https://unity3d.com/get-unity/download)
+[![Input System](https://img.shields.io/badge/Input%20System-2.2.0%2B-green.svg)](https://docs.unity3d.com/Packages/com.unity.inputsystem@1.4/manual/index.html)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **PlugInputPack** is a reusable Unity package that simplifies the setup and usage of the Unity Input System. With a clean, modular architecture and an intuitive API, it helps you avoid repetitive code and get your inputs running quickly in any project.
@@ -11,23 +11,21 @@
 ## Features
 
 **Ease of Use**
-- Simple API: `input["Move"]` to access any input
+- Simple API: `input["Move"]` or `input[InputNames.Move]` to access any input
 - Automatic conversions: Native support for Vector2, Vector3, float, bool, int
 - Zero configuration: Works right after import
 - ScriptableObject: Reusable configurations across projects
+- Auto-generated `InputNames.cs`: IntelliSense-friendly string constants, regenerated automatically when your `.inputactions` changes
 
 **Advanced Features**
-- Built-in debug system: Detailed logs and real-time visualization
-- Optimized cache + object pool: Better performance with smart memory management
-- Advanced public events: 8 input events + 4 device events for maximum flexibility
+- Built-in debug system: Detailed console logs and real-time screen overlay
+- Advanced public events: 8 input events + 3 device events for maximum flexibility
 - Robust validation: Safe error handling and invalid configuration checks
 
 **Device Management**
 - Automatic device detection: Detects Keyboard, Mouse, Gamepad, Touch, Joystick and XR Controllers
 - Device switch events: React when the player switches input method
-- Strict device isolation: Optionally filter inputs by active device only
-- Allowed device list: Restrict which device types can be used
-- Composite action support: Smart detection for actions like Look that may use mouse or gamepad simultaneously
+- Switch cooldown: Configurable minimum time before the active device can change
 
 **Cursor Management**
 - Auto lock on start: Optionally lock and hide the cursor at startup
@@ -74,6 +72,7 @@ Add to your `Packages/manifest.json`:
 1. Create an Input Action Asset via `Create > Input Actions` and configure your actions (Move, Jump, Attack, etc.)
 2. Create a PlugInputReader via `Create > Scriptable Objects > Plug Input Pack > Input Reader`, drag your Input Action Asset into the field and configure debug, device and cursor options as needed
 3. Add the `PlugInputComponent` to a GameObject and drag the created PlugInputReader into it
+4. Save your `.inputactions` asset — `InputNames.cs` will be generated automatically next to your PlugInputReader
 
 ### Using in Scripts
 
@@ -84,40 +83,47 @@ using PlugInputPack;
 public class PlayerController : MonoBehaviour
 {
     private PlugInputComponent input;
-    
+
     void Start()
     {
         input = FindObjectOfType<PlugInputComponent>();
     }
-    
+
     void Update()
     {
         // Direct reading with automatic conversion
-        Vector2 movement = input["Move"];
-        bool jump = input["Jump"];
-        float lookX = input["LookX"];
-        
-        if (input["Jump"].Pressed)
-        {
-            // Runs only on the frame it was pressed
+        Vector2 movement = input[InputNames.Move];
+        bool jump = input[InputNames.Jump];
+
+        // JustPressed: true only on the frame it was pressed — use in Update
+        if (input[InputNames.Jump].JustPressed)
             Jump();
-        }
-        
-        if (input["Move"].Bool)
-        {
-            // True while being held
-            Move(input["Move"].Vector2);
-        }
+
+        // IsHeld: true while the button is held down
+        if (input[InputNames.Move].IsHeld)
+            Move(input[InputNames.Move].Vector2);
     }
-    
+
     void Jump() => Debug.Log("Jumping!");
     void Move(Vector2 direction) => transform.Translate(direction * Time.deltaTime);
 }
 ```
 
+### FixedUpdate Input
+
+Use `TakePress()` / `TakeRelease()` when reading input from `FixedUpdate`. These consume the event and return `true` exactly once per press, regardless of how many `FixedUpdate` calls occur in the same frame.
+
+```csharp
+void FixedUpdate()
+{
+    if (input[InputNames.Jump].TakePress())
+        ApplyJumpForce();
+}
+```
+
 ### Input Event System
 
-Events are instance-based — subscribe via a reference to the `PlugInputComponent`, not the class itself.
+Events are instance-based — subscribe via a reference to the `PlugInputComponent`.
 
 ```csharp
 using UnityEngine;
@@ -129,51 +135,51 @@ public class InputEventHandler : MonoBehaviour
 
     void OnEnable()
     {
-        input.OnInputPerformed += HandleInputPerformed;
-        input.OnInputCanceled += HandleInputCanceled;
-        input.OnInputPressed += HandleInputPressed;
-        input.OnInputReleased += HandleInputReleased;
-        input.OnInputValueChanged += HandleFloatChange;
-        input.OnInputVector2Changed += HandleVector2Change;
-        input.OnInputStateChanged += HandleBoolChange;
+        input.OnInputPerformed        += HandleInputPerformed;
+        input.OnInputCanceled         += HandleInputCanceled;
+        input.OnInputPressed          += HandleInputPressed;
+        input.OnInputReleased         += HandleInputReleased;
+        input.OnInputValueChanged     += HandleFloatChange;
+        input.OnInputVector2Changed   += HandleVector2Change;
+        input.OnInputStateChanged     += HandleBoolChange;
         input.OnInputSystemInitialized += HandleSystemInit;
-        input.OnInputSystemDestroyed += HandleSystemDestroy;
+        input.OnInputSystemDestroyed  += HandleSystemDestroy;
     }
-    
+
     void OnDisable()
     {
-        input.OnInputPerformed -= HandleInputPerformed;
-        input.OnInputCanceled -= HandleInputCanceled;
-        input.OnInputPressed -= HandleInputPressed;
-        input.OnInputReleased -= HandleInputReleased;
-        input.OnInputValueChanged -= HandleFloatChange;
-        input.OnInputVector2Changed -= HandleVector2Change;
-        input.OnInputStateChanged -= HandleBoolChange;
+        input.OnInputPerformed        -= HandleInputPerformed;
+        input.OnInputCanceled         -= HandleInputCanceled;
+        input.OnInputPressed          -= HandleInputPressed;
+        input.OnInputReleased         -= HandleInputReleased;
+        input.OnInputValueChanged     -= HandleFloatChange;
+        input.OnInputVector2Changed   -= HandleVector2Change;
+        input.OnInputStateChanged     -= HandleBoolChange;
         input.OnInputSystemInitialized -= HandleSystemInit;
-        input.OnInputSystemDestroyed -= HandleSystemDestroy;
+        input.OnInputSystemDestroyed  -= HandleSystemDestroy;
     }
-    
+
     void HandleInputPerformed(string actionName, InputValue value)
         => Debug.Log($"Input {actionName} performed: {value}");
-    
+
     void HandleInputPressed(string actionName)
         => Debug.Log($"Pressed: {actionName}");
-    
+
     void HandleInputReleased(string actionName)
         => Debug.Log($"Released: {actionName}");
-    
+
     void HandleFloatChange(string actionName, float value)
         => Debug.Log($"Float changed {actionName}: {value}");
-    
+
     void HandleVector2Change(string actionName, Vector2 value)
         => Debug.Log($"Vector2 changed {actionName}: {value}");
-    
+
     void HandleBoolChange(string actionName, bool value)
         => Debug.Log($"Bool changed {actionName}: {value}");
-    
+
     void HandleSystemInit()
         => Debug.Log("Input system initialized!");
-    
+
     void HandleSystemDestroy()
         => Debug.Log("Input system destroyed!");
 }
@@ -188,28 +194,23 @@ using PlugInputPack;
 
 public class DeviceHandler : MonoBehaviour
 {
-    private PlugInputComponent input;
+    [SerializeField] private PlugInputComponent input;
 
-    void Start()
-    {
-        input = FindObjectOfType<PlugInputComponent>();
+    void Start() =>
         Debug.Log($"Current device: {input.CurrentDeviceName} ({input.CurrentDeviceType})");
-    }
 
     void OnEnable()
     {
-        input.OnDeviceChanged += HandleDeviceChanged;
-        input.OnDeviceConnected += HandleDeviceConnected;
+        input.OnDeviceChanged      += HandleDeviceChanged;
+        input.OnDeviceConnected    += HandleDeviceConnected;
         input.OnDeviceDisconnected += HandleDeviceDisconnected;
-        input.OnDeviceFiltered += HandleDeviceFiltered;
     }
 
     void OnDisable()
     {
-        input.OnDeviceChanged -= HandleDeviceChanged;
-        input.OnDeviceConnected -= HandleDeviceConnected;
+        input.OnDeviceChanged      -= HandleDeviceChanged;
+        input.OnDeviceConnected    -= HandleDeviceConnected;
         input.OnDeviceDisconnected -= HandleDeviceDisconnected;
-        input.OnDeviceFiltered -= HandleDeviceFiltered;
     }
 
     void HandleDeviceChanged(PlugInputDeviceManager.DeviceType previous, PlugInputDeviceManager.DeviceType current)
@@ -220,78 +221,47 @@ public class DeviceHandler : MonoBehaviour
 
     void HandleDeviceDisconnected(InputDevice device)
         => Debug.Log($"Device disconnected: {device.displayName}");
-
-    void HandleDeviceFiltered(PlugInputDeviceManager.DeviceType deviceType)
-        => Debug.Log($"Input from {deviceType} was ignored (not in allowed list)");
 }
 ```
 
 ### Cursor Management
 
 ```csharp
-using UnityEngine;
-using PlugInputPack;
-
-public class CursorHandler : MonoBehaviour
+void Update()
 {
-    private PlugInputComponent input;
-
-    void Start()
+    if (input[InputNames.Pause].JustPressed)
     {
-        input = FindObjectOfType<PlugInputComponent>();
+        if (input.IsCursorLocked) input.UnlockCursor();
+        else                      input.LockCursor();
     }
 
-    void Update()
-    {
-        if (input["Pause"].Pressed)
-        {
-            if (input.IsCursorLocked)
-                input.UnlockCursor();
-            else
-                input.LockCursor();
-        }
-
-        // Reset to automatic behavior defined in the PlugInputReader
-        if (input["ResetCursor"].Pressed)
-            input.ResetCursorBehavior();
-    }
+    // Reset to automatic behavior defined in the PlugInputReader
+    if (input[InputNames.ResetCursor].JustPressed)
+        input.ResetCursorBehavior();
 }
 ```
 
 ### Safe Validation
 
 ```csharp
-if (input.HasInput("SpecialAction"))
+if (input.HasInput(InputNames.SpecialAction))
 {
-    bool special = input["SpecialAction"];
+    bool special = input[InputNames.SpecialAction];
 }
 
-if (input.TryGetInput("Move", out InputAccessor moveInput))
+if (input.TryGetInput(InputNames.Move, out InputAccessor moveInput))
 {
     Vector2 movement = moveInput.Vector2;
 }
 
-InputAccessor accessor = input["Jump"];
+InputAccessor accessor = input[InputNames.Jump];
 if (accessor != null && accessor.IsValid)
 {
-    bool jumped = accessor.Pressed;
+    bool jumped = accessor.JustPressed;
 }
 
-foreach (string inputName in input.GetAllInputNames())
-{
-    Debug.Log($"Available input: {inputName}");
-}
-```
-
-### Force Device Type
-
-```csharp
-bool success = input.ForceDeviceType(PlugInputDeviceManager.DeviceType.Gamepad);
-
-if (success)
-    Debug.Log("Now using Gamepad");
-else
-    Debug.Log("Gamepad not available");
+foreach (string name in input.GetAllInputNames())
+    Debug.Log($"Available input: {name}");
 ```
 
 ---
@@ -302,52 +272,52 @@ else
 
 ```csharp
 // Implicit conversions
-Vector2 movement = input["Move"];
-float axis = input["Horizontal"];
-bool button = input["Jump"];
+Vector2 movement = input[InputNames.Move];
+float   axis     = input[InputNames.Horizontal];
+bool    button   = input[InputNames.Jump];
 
 // Typed properties
-input["Move"].Vector2
-input["Move"].Vector3
-input["Move"].Float
-input["Move"].Bool
-input["Move"].Int
+input[InputNames.Move].Vector2
+input[InputNames.Move].Vector3
+input[InputNames.Move].Float
+input[InputNames.Move].Bool
+input[InputNames.Move].Int
 
 // Frame states
-input["Jump"].Pressed      // Pressed THIS frame — use in Update
-input["Jump"].Released     // Released THIS frame — use in Update
-input["Jump"].IsPressed    // Currently held
+input[InputNames.Jump].JustPressed   // true on the frame it was pressed — use in Update
+input[InputNames.Jump].JustReleased  // true on the frame it was released — use in Update
+input[InputNames.Jump].IsHeld        // true while held down
 
 // FixedUpdate-safe consume methods
-// Return true exactly once per event regardless of how many FixedUpdate calls occur in the frame
-input["Jump"].ConsumePressedPending()
-input["Jump"].ConsumeReleasedPending()
+// Return true exactly once per event, regardless of how many FixedUpdate calls occur in the frame
+input[InputNames.Jump].TakePress()
+input[InputNames.Jump].TakeRelease()
 
 // Validity
-input["Jump"].IsValid
+input[InputNames.Jump].IsValid
 
-// Debug info
-input["Move"].RawValue
-input["Move"].InputType    // e.g. "Vector2", "Button"
-input["Move"].Name
+// Debug info (allocates — avoid calling every frame)
+input[InputNames.Move].RawValue
+input[InputNames.Move].InputType   // e.g. "Vector2", "Button"
+input[InputNames.Move].Name
 ```
 
 ### PlugInputComponent Methods & Properties
 
 ```csharp
 // Main access
-InputAccessor accessor = input["ActionName"];
+InputAccessor accessor = input[InputNames.ActionName];
 
 // Validation
-bool exists = input.HasInput("ActionName");
-bool success = input.TryGetInput("ActionName", out InputAccessor accessor);
-IEnumerable<string> allInputs = input.GetAllInputNames();
+bool                   exists    = input.HasInput(InputNames.ActionName);
+bool                   success   = input.TryGetInput(InputNames.ActionName, out InputAccessor accessor);
+IEnumerable<string>    allInputs = input.GetAllInputNames();
 
 // Device info
-PlugInputDeviceManager.DeviceType type = input.CurrentDeviceType;
-string deviceName = input.CurrentDeviceName;
-PlugInputDeviceManager manager = input.DeviceManager;
-bool forced = input.ForceDeviceType(PlugInputDeviceManager.DeviceType.Gamepad);
+PlugInputDeviceManager.DeviceType type       = input.CurrentDeviceType;
+string                            deviceName = input.CurrentDeviceName;
+PlugInputDeviceManager            manager    = input.DeviceManager;
+bool                              forced     = input.ForceDeviceType(PlugInputDeviceManager.DeviceType.Gamepad);
 
 // Cursor
 bool locked = input.IsCursorLocked;
@@ -359,7 +329,7 @@ input.ResetCursorBehavior();
 ### Input Events
 
 ```csharp
-OnInputPerformed(string actionName, object value)
+OnInputPerformed(string actionName, InputValue value)
 OnInputCanceled(string actionName)
 OnInputPressed(string actionName)
 OnInputReleased(string actionName)
@@ -376,7 +346,6 @@ OnInputSystemDestroyed()
 OnDeviceChanged(DeviceType previous, DeviceType current)
 OnDeviceConnected(InputDevice device)
 OnDeviceDisconnected(InputDevice device)
-OnDeviceFiltered(DeviceType deviceType)
 ```
 
 ### DeviceType Enum
@@ -393,6 +362,29 @@ PlugInputDeviceManager.DeviceType.XRController
 
 ---
 
+## InputNames — IntelliSense for Action Names
+
+When you save your `.inputactions` asset, `InputNames.cs` is generated automatically next to your `PlugInputReader`. It contains a `const string` for every action, so you get IntelliSense autocomplete and never mistype an action name.
+
+```csharp
+// Generated automatically — do not edit manually
+namespace PlugInputPack
+{
+    public static class InputNames
+    {
+        // Player
+        public const string Move   = "Move";
+        public const string Jump   = "Jump";
+        public const string Attack = "Attack";
+        // ...
+    }
+}
+```
+
+The file is only rewritten when action **names** change. Editing bindings without renaming actions does not trigger a domain reload.
+
+---
+
 ## PlugInputReader Settings
 
 Create via `Create > Scriptable Objects > Plug Input Pack > Input Reader`.
@@ -400,16 +392,12 @@ Create via `Create > Scriptable Objects > Plug Input Pack > Input Reader`.
 | Section | Field | Description |
 |---|---|---|
 | Main | Input Action Asset | Your Unity Input System asset |
-| Debug | Enable Debug | Detailed console logs |
-| Debug | Enable Visual Debug | Real-time on-screen overlay |
-| Visual | Debug Handle Size | Scale of visual elements (1–300) |
-| Visual | Debug Handle Color | Color of the overlay |
-| Device Management | Enable Device Management | Automatic device detection |
-| Device Management | Strict Device Isolation | Only process inputs from the active device |
-| Device Management | Device Switch Cooldown | Minimum seconds between device switches (0–2s) |
-| Device Management | Allowed Devices | Whitelist of accepted device types (empty = all) |
-| Cursor | Lock Cursor On Start | Lock and hide cursor on scene start |
-| Cursor | Auto Lock Cursor On Gamepad | Auto lock/unlock when switching to or from gamepad |
+| Debug | Console Logs | Print input activity to the Unity console |
+| Debug | Screen Overlay | Real-time on-screen overlay during Play Mode |
+| Device Management | Enable | Automatic device detection and tracking |
+| Device Management | Switch Cooldown | Minimum seconds between device switches (0–2s) |
+| Cursor | Lock On Start | Lock and hide cursor on scene start |
+| Cursor | Auto Lock On Gamepad | Auto lock/unlock when switching to or from gamepad |
 
 The visual debug overlay shows active inputs, real-time values, a direction indicator for Vector2 inputs, and inputs fade out shortly after becoming inactive.
 

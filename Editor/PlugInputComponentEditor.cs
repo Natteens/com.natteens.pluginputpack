@@ -7,40 +7,29 @@ namespace PlugInputPack.Editor
     public class PlugInputComponentEditor : UnityEditor.Editor
     {
         private SerializedProperty _inputReaderProperty;
-        private bool _showRuntime;
-        private bool _showDevice;
-        private bool _showEvents;
+        private bool _showRuntime, _showDevice, _showEvents;
 
-        // Colors resolved at draw time — respect Pro vs Personal skin
         private static Color BgSection  => EditorGUIUtility.isProSkin ? new Color(0.22f, 0.22f, 0.24f) : new Color(0.86f, 0.86f, 0.87f);
         private static Color Accent     => EditorGUIUtility.isProSkin ? new Color(0.28f, 0.52f, 0.78f) : new Color(0.16f, 0.40f, 0.70f);
         private static Color OkGreen    => EditorGUIUtility.isProSkin ? new Color(0.28f, 0.65f, 0.40f) : new Color(0.12f, 0.48f, 0.25f);
         private static Color WarnYellow => EditorGUIUtility.isProSkin ? new Color(0.82f, 0.68f, 0.22f) : new Color(0.60f, 0.45f, 0.05f);
-        private static Color Divider    => EditorGUIUtility.isProSkin ? new Color(1f, 1f, 1f, 0.08f) : new Color(0f, 0f, 0f, 0.14f);
+        private static Color Divider    => EditorGUIUtility.isProSkin ? new Color(1f, 1f, 1f, 0.08f)   : new Color(0f, 0f, 0f, 0.14f);
 
-        private GUIStyle _sectionStyle;
-        private GUIStyle _foldoutStyle;
-        private GUIStyle _boldStyle;
-        private GUIStyle _labelStyle;
-        private GUIStyle _miniStyle;
-        private GUIStyle _monoStyle;
-        private GUIStyle _btnPrimary;
-        private GUIStyle _btnSecondary;
+        private GUIStyle _sectionStyle, _foldoutStyle, _boldStyle, _labelStyle, _miniStyle, _monoStyle, _btnPrimary, _btnSecondary;
         private Texture2D _bgTex;
-        private bool _stylesBuilt;
-        private bool _lastSkin;
+        private bool _stylesBuilt, _lastSkin;
 
         private static readonly (string sig, string desc)[] InputEvents =
         {
-            ("OnInputPerformed(string, InputValue)",  "any input performed"),
-            ("OnInputCanceled(string)",               "any input canceled"),
-            ("OnInputPressed(string)",                "pressed this frame"),
-            ("OnInputReleased(string)",               "released this frame"),
-            ("OnInputValueChanged(string, float)",    "float value changed"),
-            ("OnInputVector2Changed(string, Vector2)","Vector2 value changed"),
-            ("OnInputStateChanged(string, bool)",     "bool value changed"),
-            ("OnInputSystemInitialized()",            "system ready"),
-            ("OnInputSystemDestroyed()",              "system shut down"),
+            ("OnInputPerformed(string, InputValue)",   "any input performed"),
+            ("OnInputCanceled(string)",                "any input canceled"),
+            ("OnInputPressed(string)",                 "pressed this frame"),
+            ("OnInputReleased(string)",                "released this frame"),
+            ("OnInputValueChanged(string, float)",     "float value changed"),
+            ("OnInputVector2Changed(string, Vector2)", "Vector2 value changed"),
+            ("OnInputStateChanged(string, bool)",      "bool value changed"),
+            ("OnInputSystemInitialized()",             "system ready"),
+            ("OnInputSystemDestroyed()",               "system shut down"),
         };
 
         private static readonly (string sig, string desc)[] DeviceEvents =
@@ -48,7 +37,15 @@ namespace PlugInputPack.Editor
             ("OnDeviceChanged(DeviceType, DeviceType)", "player switched device"),
             ("OnDeviceConnected(InputDevice)",          "new device connected"),
             ("OnDeviceDisconnected(InputDevice)",       "device disconnected"),
-            ("OnDeviceFiltered(DeviceType)",            "rejected (not in allowed list)"),
+        };
+
+        private static readonly (string prop, string desc)[] AccessorAPI =
+        {
+            ("JustPressed",   "true no frame que foi pressionado (Update)"),
+            ("JustReleased",  "true no frame que foi solto (Update)"),
+            ("IsHeld",        "true enquanto segurado"),
+            ("TakePress()",   "consome press — use em FixedUpdate"),
+            ("TakeRelease()", "consome release — use em FixedUpdate"),
         };
 
         private void OnEnable() => _inputReaderProperty = serializedObject.FindProperty("inputReader");
@@ -59,39 +56,22 @@ namespace PlugInputPack.Editor
             bool pro = EditorGUIUtility.isProSkin;
             if (_stylesBuilt && _lastSkin == pro && _bgTex != null) return;
             _lastSkin = pro;
-
             if (_bgTex) Object.DestroyImmediate(_bgTex);
-            _bgTex = Solid(BgSection);
-
-            _sectionStyle = new GUIStyle
-            {
-                normal  = { background = _bgTex },
-                padding = new RectOffset(10, 10, 7, 7),
-                margin  = new RectOffset(0, 0, 0, 2)
-            };
+            _bgTex        = Solid(BgSection);
+            _sectionStyle = new GUIStyle { normal = { background = _bgTex }, padding = new RectOffset(10, 10, 7, 7), margin = new RectOffset(0, 0, 0, 2) };
             _foldoutStyle = new GUIStyle(EditorStyles.foldout) { fontStyle = FontStyle.Bold, fontSize = 11 };
             _boldStyle    = new GUIStyle(EditorStyles.boldLabel) { fontSize = 11 };
             _labelStyle   = new GUIStyle(EditorStyles.label) { wordWrap = true, fontSize = 11 };
             _miniStyle    = new GUIStyle(EditorStyles.miniLabel) { wordWrap = true };
-            _monoStyle    = new GUIStyle(EditorStyles.miniLabel)
-            {
-                wordWrap = true,
-                normal   = { textColor = EditorGUIUtility.isProSkin ? new Color(0.55f, 0.75f, 0.95f) : new Color(0.10f, 0.30f, 0.60f) }
-            };
-            _btnPrimary = new GUIStyle(GUI.skin.button)
-            {
-                fontSize    = 11,
-                fontStyle   = FontStyle.Bold,
-                fixedHeight = 23,
-                normal  = { textColor = Color.white, background = Solid(Accent) },
-                hover   = { textColor = Color.white, background = Solid(Accent + new Color(0.07f, 0.07f, 0.07f)) },
-                active  = { textColor = Color.white, background = Solid(Accent - new Color(0.05f, 0.05f, 0.05f)) }
-            };
+            _monoStyle    = new GUIStyle(EditorStyles.miniLabel) { wordWrap = true,
+                normal = { textColor = EditorGUIUtility.isProSkin ? new Color(0.55f, 0.75f, 0.95f) : new Color(0.10f, 0.30f, 0.60f) } };
+            _btnPrimary   = new GUIStyle(GUI.skin.button) { fontSize = 11, fontStyle = FontStyle.Bold, fixedHeight = 23,
+                normal = { textColor = Color.white, background = Solid(Accent) },
+                hover  = { textColor = Color.white, background = Solid(Accent + new Color(0.07f, 0.07f, 0.07f)) },
+                active = { textColor = Color.white, background = Solid(Accent - new Color(0.05f, 0.05f, 0.05f)) } };
             _btnSecondary = new GUIStyle(EditorStyles.miniButton) { fontSize = 11, fixedHeight = 23 };
-            _stylesBuilt = true;
+            _stylesBuilt  = true;
         }
-
-        // ── Main ────────────────────────────────────────────────────────────────
 
         public override void OnInspectorGUI()
         {
@@ -112,16 +92,15 @@ namespace PlugInputPack.Editor
             }
             else
             {
-                DrawDesignBanner();
+                EditorGUILayout.BeginVertical(_sectionStyle);
+                EditorGUILayout.LabelField("Enter Play Mode to inspect runtime state and device info.", _miniStyle);
+                EditorGUILayout.EndVertical();
                 GUILayout.Space(2);
             }
 
-            DrawFoldout("Available Events", ref _showEvents, DrawEventsContent);
-
+            DrawFoldout("Available Events & API", ref _showEvents, DrawEventsContent);
             serializedObject.ApplyModifiedProperties();
         }
-
-        // ── Title ───────────────────────────────────────────────────────────────
 
         private void DrawTitleBar()
         {
@@ -131,30 +110,19 @@ namespace PlugInputPack.Editor
             EditorGUILayout.LabelField("Plug Input Component", new GUIStyle(EditorStyles.boldLabel) { fontSize = 13 });
         }
 
-        // ── Foldout helper (no GetLastRect after BeginVertical) ─────────────────
-
         private void DrawFoldout(string title, ref bool open, System.Action content)
         {
             EditorGUILayout.BeginVertical(_sectionStyle);
             open = EditorGUILayout.Foldout(open, title, true, _foldoutStyle);
-            if (open)
-            {
-                HairLine();
-                GUILayout.Space(3);
-                content();
-                GUILayout.Space(2);
-            }
+            if (open) { HairLine(); GUILayout.Space(3); content(); GUILayout.Space(2); }
             EditorGUILayout.EndVertical();
         }
-
-        // ── Always-visible blocks ────────────────────────────────────────────────
 
         private void DrawConfigBlock()
         {
             EditorGUILayout.BeginVertical(_sectionStyle);
             EditorGUILayout.LabelField("Configuration", _boldStyle);
-            HairLine();
-            GUILayout.Space(3);
+            HairLine(); GUILayout.Space(3);
 
             EditorGUI.BeginChangeCheck();
             EditorGUILayout.PropertyField(_inputReaderProperty,
@@ -182,28 +150,16 @@ namespace PlugInputPack.Editor
                 GUILayout.Space(4);
                 if (GUILayout.Button("Open Input Reader", _btnSecondary)) Ping(reader);
             }
-
             EditorGUILayout.EndVertical();
         }
-
-        private void DrawDesignBanner()
-        {
-            EditorGUILayout.BeginVertical(_sectionStyle);
-            EditorGUILayout.LabelField("Enter Play Mode to inspect runtime state and device info.", _miniStyle);
-            EditorGUILayout.EndVertical();
-        }
-
-        // ── Section content ──────────────────────────────────────────────────────
 
         private void DrawRuntimeContent()
         {
             var c = target as PlugInputComponent;
             KV("System", "Active");
-
             var cf = typeof(PlugInputComponent).GetField("_cache",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (cf?.GetValue(c) is PlugInputCache cache) KV("Cache", cache.GetCacheStats());
-
             GUILayout.Space(4);
             if (GUILayout.Button("Repaint", _btnSecondary, GUILayout.Width(74)))
                 EditorUtility.SetDirty(target);
@@ -217,9 +173,7 @@ namespace PlugInputPack.Editor
 
             if (c.DeviceManager != null)
             {
-                GUILayout.Space(4);
-                HairLine();
-                GUILayout.Space(4);
+                GUILayout.Space(4); HairLine(); GUILayout.Space(4);
                 foreach (string line in c.DeviceManager.GetDebugInfo().Split('\n'))
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
@@ -239,6 +193,11 @@ namespace PlugInputPack.Editor
 
         private void DrawEventsContent()
         {
+            EditorGUILayout.LabelField("InputAccessor — Frame States", _boldStyle);
+            GUILayout.Space(3);
+            foreach (var (prop, desc) in AccessorAPI) EventRow(prop, desc);
+
+            GUILayout.Space(5);
             EditorGUILayout.LabelField("Input Events", _boldStyle);
             GUILayout.Space(3);
             foreach (var (sig, desc) in InputEvents) EventRow(sig, desc);
@@ -248,8 +207,6 @@ namespace PlugInputPack.Editor
             GUILayout.Space(3);
             foreach (var (sig, desc) in DeviceEvents) EventRow(sig, desc);
         }
-
-        // ── UI primitives ────────────────────────────────────────────────────────
 
         private void HairLine()
         {
@@ -278,13 +235,11 @@ namespace PlugInputPack.Editor
         private void EventRow(string sig, string desc)
         {
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(sig,  _monoStyle, GUILayout.MinWidth(160));
+            EditorGUILayout.LabelField(sig,        _monoStyle, GUILayout.MinWidth(160));
             EditorGUILayout.LabelField($"— {desc}", _miniStyle);
             EditorGUILayout.EndHorizontal();
             GUILayout.Space(1);
         }
-
-        // ── Asset helpers ────────────────────────────────────────────────────────
 
         private static void Ping(Object o) { Selection.activeObject = o; EditorGUIUtility.PingObject(o); }
 
