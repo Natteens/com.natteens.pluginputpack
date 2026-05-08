@@ -19,6 +19,7 @@ namespace PlugInputPack
         private bool           _originalCursorVisible;
         private bool           _hasManualOverride;
         private bool           _inputEventsSubscribed;
+        private bool           _inputSystemInitialized;
 
         private readonly Dictionary<string, InputValue> _lastValues = new();
 
@@ -67,6 +68,8 @@ namespace PlugInputPack
 
         private void OnEnable()
         {
+            if (!_inputSystemInitialized) return;
+
             var actionAsset = inputReader?.InputActionAsset;
             if (actionAsset == null) return;
 
@@ -76,6 +79,8 @@ namespace PlugInputPack
 
         private void OnDisable()
         {
+            if (!_inputSystemInitialized) return;
+
             var actionAsset = inputReader?.InputActionAsset;
             if (actionAsset == null) return;
 
@@ -97,6 +102,7 @@ namespace PlugInputPack
 
             if (inputReader.LockCursorOnStart) LockCursor(); else UnlockCursor();
 
+            _inputSystemInitialized = true;
             OnInputSystemInitialized?.Invoke();
         }
 
@@ -110,8 +116,6 @@ namespace PlugInputPack
                     _lastValues[action.name] = default;
                     total++;
                 }
-
-            SubscribeInputEvents(actionAsset);
 
             if (inputReader.EnableDebug)
                 _debugger.LogReady(actionAsset.actionMaps.Count, total);
@@ -159,11 +163,12 @@ namespace PlugInputPack
             _cache?.Dispose();
             _debugger?.Clear();
             _deviceManager?.Dispose();
+            _inputSystemInitialized = false;
         }
 
         private void SubscribeInputEvents(InputActionAsset actionAsset)
         {
-            if (_inputEventsSubscribed || actionAsset == null) return;
+            if (actionAsset == null || _inputEventsSubscribed) return;
 
             foreach (var map in actionAsset.actionMaps)
                 foreach (var action in map.actions)
@@ -177,7 +182,7 @@ namespace PlugInputPack
 
         private void UnsubscribeInputEvents(InputActionAsset actionAsset)
         {
-            if (!_inputEventsSubscribed || actionAsset == null) return;
+            if (actionAsset == null || !_inputEventsSubscribed) return;
 
             foreach (var map in actionAsset.actionMaps)
                 foreach (var action in map.actions)
