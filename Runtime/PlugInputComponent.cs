@@ -18,6 +18,8 @@ namespace PlugInputPack
         private CursorLockMode _originalCursorLockMode;
         private bool           _originalCursorVisible;
         private bool           _hasManualOverride;
+        private bool           _inputEventsSubscribed;
+        private bool           _inputSystemInitialized;
 
         private readonly Dictionary<string, InputValue> _lastValues = new();
 
@@ -64,14 +66,32 @@ namespace PlugInputPack
                 Debug.LogWarning("[PlugInput] No Input Reader or Input Action Asset assigned.");
         }
 
+        private void OnEnable()
+        {
+            if (!_inputSystemInitialized) return;
+
+            var actionAsset = inputReader?.InputActionAsset;
+            if (actionAsset == null) return;
+
+            SubscribeInputEvents(actionAsset);
+            actionAsset.Enable();
+        }
+
+        private void OnDisable()
+        {
+            if (!_inputSystemInitialized) return;
+
+            var actionAsset = inputReader?.InputActionAsset;
+            if (actionAsset == null) return;
+
+            actionAsset.Disable();
+            UnsubscribeInputEvents(actionAsset);
+        }
+
         private void InitializeInputSystem()
         {
             var actionAsset = inputReader.InputActionAsset;
             if (actionAsset == null) { Debug.LogError("[PlugInput] InputActionAsset is null."); return; }
-
-            // BUG FIX: desabilita o asset antes de registrar — o ScriptableObject persiste
-            // entre cenas e pode já ter actions enabled sem listeners do ciclo anterior.
-            actionAsset.Disable();
 
             _debugger.SetEnabled(inputReader.EnableDebug);
             _visualizer.Initialize(inputReader.EnableVisualDebug, inputReader.DebugHandleSize / 100f, inputReader.DebugHandleColor);
@@ -82,6 +102,7 @@ namespace PlugInputPack
 
             if (inputReader.LockCursorOnStart) LockCursor(); else UnlockCursor();
 
+            _inputSystemInitialized = true;
             OnInputSystemInitialized?.Invoke();
         }
 
@@ -91,15 +112,10 @@ namespace PlugInputPack
             foreach (var map in actionAsset.actionMaps)
                 foreach (var action in map.actions)
                 {
-                    action.performed += OnActionPerformed;
-                    action.canceled  += OnActionCanceled;
                     _cache.RegisterState(action);
                     _lastValues[action.name] = default;
                     total++;
                 }
-
-            // Habilita tudo de uma vez — depois de todos os listeners estarem registrados
-            actionAsset.Enable();
 
             if (inputReader.EnableDebug)
                 _debugger.LogReady(actionAsset.actionMaps.Count, total);
@@ -141,18 +157,47 @@ namespace PlugInputPack
 
             OnInputSystemDestroyed?.Invoke();
 
-            if (inputReader?.InputActionAsset != null)
-                foreach (var map in inputReader.InputActionAsset.actionMaps)
-                    foreach (var action in map.actions)
-                    {
-                        action.performed -= OnActionPerformed;
-                        action.canceled  -= OnActionCanceled;
-                    }
+            UnsubscribeInputEvents(inputReader?.InputActionAsset);
 
             _lastValues?.Clear();
             _cache?.Dispose();
             _debugger?.Clear();
             _deviceManager?.Dispose();
+            _inputSystemInitialized = false;
+        }
+
+        private void SubscribeInputEvents(InputActionAsset actionAsset)
+        {
+            if (actionAsset == null || _inputEventsSubscribed) return;
+
+            foreach (var map in actionAsset.actionMaps)
+                foreach (var action in map.actions)
+                {
+                    action.performed += OnActionPerformed;
+                    action.canceled  += OnActionCanceled;
+                }
+
+            _inputEventsSubscribed = true;
+        }
+
+        private void UnsubscribeInputEvents(InputActionAsset actionAsset)
+        {
+            if (actionAsset == null)
+            {
+                _inputEventsSubscribed = false;
+                return;
+            }
+
+            if (!_inputEventsSubscribed) return;
+
+            foreach (var map in actionAsset.actionMaps)
+                foreach (var action in map.actions)
+                {
+                    action.performed -= OnActionPerformed;
+                    action.canceled  -= OnActionCanceled;
+                }
+
+            _inputEventsSubscribed = false;
         }
 
         // ── Input callbacks ────────────────────────────────────────────────────────
