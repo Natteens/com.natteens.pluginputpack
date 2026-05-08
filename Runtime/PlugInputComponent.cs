@@ -182,7 +182,13 @@ namespace PlugInputPack
 
         private void UnsubscribeInputEvents(InputActionAsset actionAsset)
         {
-            if (actionAsset == null || !_inputEventsSubscribed) return;
+            if (actionAsset == null)
+            {
+                _inputEventsSubscribed = false;
+                return;
+            }
+
+            if (!_inputEventsSubscribed) return;
 
             foreach (var map in actionAsset.actionMaps)
                 foreach (var action in map.actions)
