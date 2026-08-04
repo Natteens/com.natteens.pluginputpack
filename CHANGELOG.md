@@ -1,3 +1,11 @@
+## [2.2.3](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.2.2...v2.2.3) (2026-08-04)
+
+
+### Bug Fixes
+
+* preserve UPM dependencies during release [skip ci] ([656ed66](https://github.com/Natteens/com.natteens.pluginputpack/commit/656ed668a506af1ff20683d4b7484aeb41199768))
+* restore Input System dependency ([7c770fa](https://github.com/Natteens/com.natteens.pluginputpack/commit/7c770fac2922e2dd586ab8807f82762f984013f7))
+
 ## [2.2.2](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.2.1...v2.2.2) (2026-08-04)
 
 
