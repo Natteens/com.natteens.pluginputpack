@@ -1,3 +1,10 @@
+## [2.2.2](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.2.1...v2.2.2) (2026-08-04)
+
+
+### Bug Fixes
+
+* declare Input System dependency ([638f119](https://github.com/Natteens/com.natteens.pluginputpack/commit/638f119dc03c7551ebee37ba179336a95a1d5f36))
+
 ## [2.2.1](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.2.0...v2.2.1) (2026-05-08)
 
 
