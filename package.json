@@ -18,7 +18,9 @@
   },
   "unity": "2022.3",
   "unityRelease": "0f1",
-  "dependencies": {},
+  "dependencies": {
+    "com.unity.inputsystem": "1.6.1"
+  },
   "documentationUrl": "https://github.com/Natteens/com.natteens.pluginputpack/blob/main/README.md",
   "changelogUrl": "https://github.com/Natteens/com.natteens.pluginputpack/blob/main/CHANGELOG.md",
   "licensesUrl": "https://github.com/Natteens/com.natteens.pluginputpack/blob/main/LICENSE",
