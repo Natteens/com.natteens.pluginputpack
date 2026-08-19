@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/Natteens/Plug-Input-Pack/compare/v2.2.3...v2.3.0) (2026-08-19)
+
+
+### Features
+
+* expose runtime input asset for rebinding ([ce85347](https://github.com/Natteens/Plug-Input-Pack/commit/ce853471cb04db60d87b8982f427062bb5168b00))
+
 ## [2.2.3](https://github.com/Natteens/com.natteens.pluginputpack/compare/v2.2.2...v2.2.3) (2026-08-04)
 
 
