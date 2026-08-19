@@ -45,10 +45,11 @@ namespace PlugInputPack
         public event Action<InputDevice>         OnDeviceConnected;
         public event Action<InputDevice>         OnDeviceDisconnected;
 
-        public PlugInputDeviceManager            DeviceManager    => _deviceManager;
+        public PlugInputDeviceManager            DeviceManager     => _deviceManager;
         public PlugInputDeviceManager.DeviceType CurrentDeviceType => _deviceManager?.CurrentDeviceType ?? PlugInputDeviceManager.DeviceType.Unknown;
         public string                            CurrentDeviceName => _deviceManager?.CurrentDeviceName ?? "None";
-        public bool                              IsCursorLocked    => _cursorLocked;
+        public bool                              IsCursorLocked     => _cursorLocked;
+        public InputActionAsset                  RuntimeAsset       => _runtimeAsset;
 
         // ── Lifecycle ──────────────────────────────────────────────────────────────
 
