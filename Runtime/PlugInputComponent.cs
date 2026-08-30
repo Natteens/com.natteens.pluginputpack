@@ -24,6 +24,7 @@ namespace PlugInputPack
         private InputActionAsset _runtimeAsset; // Instância isolada
 
         private readonly Dictionary<string, InputValue> _lastValues = new();
+        private readonly HashSet<string> _suspendedMaps = new(StringComparer.Ordinal);
 
         public delegate void InputPerformedHandler(string actionName, InputValue value);
         public delegate void InputFloatHandler(string actionName, float value);
@@ -159,6 +160,7 @@ namespace PlugInputPack
             UnsubscribeInputEvents(_runtimeAsset);
 
             _lastValues?.Clear();
+            _suspendedMaps.Clear();
             _cache?.Dispose();
             _debugger?.Clear();
             _deviceManager?.Dispose();
@@ -213,7 +215,7 @@ namespace PlugInputPack
 
             string actionName = context.action.name;
             var state = _cache.GetState(actionName);
-            if (state == null) return;
+            if (state == null || state.IsSuspended) return;
 
             OnInputPerformed?.Invoke(actionName, state.CurrentValue);
             FireValueChangedEvents(actionName, state);
@@ -225,7 +227,7 @@ namespace PlugInputPack
 
             string actionName = context.action.name;
             var state = _cache.GetState(actionName);
-            if (state == null) return;
+            if (state == null || state.IsSuspended) return;
 
             OnInputCanceled?.Invoke(actionName);
             FireValueChangedEvents(actionName, state);
@@ -339,5 +341,50 @@ namespace PlugInputPack
             !string.IsNullOrEmpty(actionName) && _cache.HasInput(actionName);
 
         public IEnumerable<string> GetAllInputNames() => _cache.GetInputNames();
+
+        public bool SuspendMap(string mapName) => SetMapSuspended(mapName, true);
+        public bool ResumeMap(string mapName) => SetMapSuspended(mapName, false);
+        public bool IsMapSuspended(string mapName) => !string.IsNullOrEmpty(mapName) && _suspendedMaps.Contains(mapName);
+
+        private bool SetMapSuspended(string mapName, bool suspended)
+        {
+            if (string.IsNullOrEmpty(mapName)) return false;
+
+            if (!_inputSystemInitialized || _runtimeAsset == null || _cache == null)
+            {
+                Debug.LogWarning($"[PlugInput] Cannot {(suspended ? "suspend" : "resume")} map '{mapName}' before the input system is initialized.", this);
+                return false;
+            }
+
+            if (_runtimeAsset.FindActionMap(mapName, false) == null)
+            {
+                Debug.LogWarning($"[PlugInput] Action map '{mapName}' was not found.", this);
+                return false;
+            }
+
+            bool alreadySuspended = _suspendedMaps.Contains(mapName);
+            if (alreadySuspended == suspended) return true;
+
+            if (suspended) _suspendedMaps.Add(mapName);
+            else _suspendedMaps.Remove(mapName);
+
+            var states = _cache.GetStates();
+            for (int i = 0; i < states.Count; i++)
+            {
+                InputState state = states[i];
+                if (string.Equals(state.ActionMapName, mapName, StringComparison.Ordinal)) state.SetSuspended(suspended);
+            }
+
+            if (!suspended)
+            {
+                for (int i = 0; i < states.Count; i++)
+                {
+                    InputState state = states[i];
+                    if (string.Equals(state.ActionMapName, mapName, StringComparison.Ordinal)) FireValueChangedEvents(state.Name, state);
+                }
+            }
+
+            return true;
+        }
     }
 }

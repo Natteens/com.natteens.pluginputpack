@@ -18,6 +18,7 @@ namespace PlugInputPack
 
         private bool _pressedPending;
         private bool _releasedPending;
+        private bool _suspended;
 
         public InputState(InputAction action)
         {
@@ -35,6 +36,12 @@ namespace PlugInputPack
             _previousValue = _currentValue;
             _currentValue  = PlugInputProcessor.ReadValue(context, _inputType);
 
+            if (_suspended)
+            {
+                ClearTransientState();
+                return;
+            }
+
             if (_currentValue.IsActive() && !_previousValue.IsActive())
             {
                 _pressedThisFrameBuffer = true;
@@ -47,6 +54,12 @@ namespace PlugInputPack
             _previousValue = _currentValue;
             _currentValue  = PlugInputProcessor.GetDefaultValue(_inputType);
 
+            if (_suspended)
+            {
+                ClearTransientState();
+                return;
+            }
+
             if (!_currentValue.IsActive() && _previousValue.IsActive())
             {
                 _releasedThisFrameBuffer = true;
@@ -56,6 +69,12 @@ namespace PlugInputPack
 
         public (bool pressed, bool released) Flush()
         {
+            if (_suspended)
+            {
+                ClearTransientState();
+                return (false, false);
+            }
+
             _pressedThisFrame  = _pressedThisFrameBuffer;
             _releasedThisFrame = _releasedThisFrameBuffer;
             _pressedThisFrameBuffer  = false;
@@ -65,16 +84,33 @@ namespace PlugInputPack
 
         public bool TakePress()
         {
-            if (!_pressedPending) return false;
+            if (_suspended || !_pressedPending) return false;
             _pressedPending = false;
             return true;
         }
 
         public bool TakeRelease()
         {
-            if (!_releasedPending) return false;
+            if (_suspended || !_releasedPending) return false;
             _releasedPending = false;
             return true;
+        }
+
+        internal void SetSuspended(bool suspended)
+        {
+            if (_suspended == suspended) return;
+            _suspended = suspended;
+            ClearTransientState();
+        }
+
+        private void ClearTransientState()
+        {
+            _pressedThisFrame = false;
+            _releasedThisFrame = false;
+            _pressedThisFrameBuffer = false;
+            _releasedThisFrameBuffer = false;
+            _pressedPending = false;
+            _releasedPending = false;
         }
 
         public void Dispose()
@@ -86,19 +122,22 @@ namespace PlugInputPack
         public string Name      => _action.name;
         public string InputType => _inputType;
 
-        public bool IsPressed         => _currentValue.IsActive();
-        public bool PressedThisFrame  => _pressedThisFrame;
-        public bool ReleasedThisFrame => _releasedThisFrame;
+        internal string ActionMapName => _action.actionMap?.name ?? string.Empty;
+        internal bool IsSuspended => _suspended;
 
-        public bool    AsBool    => _currentValue.AsBool();
-        public float   AsFloat   => _currentValue.AsFloat();
-        public int     AsInt     => _currentValue.AsInt();
-        public Vector2 AsVector2 => _currentValue.AsVector2();
-        public Vector3 AsVector3 => _currentValue.AsVector3();
+        public bool IsPressed         => !_suspended && _currentValue.IsActive();
+        public bool PressedThisFrame  => !_suspended && _pressedThisFrame;
+        public bool ReleasedThisFrame => !_suspended && _releasedThisFrame;
 
-        public InputValue CurrentValue  => _currentValue;
-        public InputValue PreviousValue => _previousValue;
+        public bool    AsBool    => !_suspended && _currentValue.AsBool();
+        public float   AsFloat   => _suspended ? 0f : _currentValue.AsFloat();
+        public int     AsInt     => _suspended ? 0 : _currentValue.AsInt();
+        public Vector2 AsVector2 => _suspended ? Vector2.zero : _currentValue.AsVector2();
+        public Vector3 AsVector3 => _suspended ? Vector3.zero : _currentValue.AsVector3();
 
-        public string GetDebugString() => _currentValue.ToString();
+        public InputValue CurrentValue  => _suspended ? PlugInputProcessor.GetDefaultValue(_inputType) : _currentValue;
+        public InputValue PreviousValue => _suspended ? PlugInputProcessor.GetDefaultValue(_inputType) : _previousValue;
+
+        public string GetDebugString() => CurrentValue.ToString();
     }
 }
