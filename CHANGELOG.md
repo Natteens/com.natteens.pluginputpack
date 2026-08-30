@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/Natteens/Plug-Input-Pack/compare/v2.3.0...v2.4.0) (2026-08-30)
+
+
+### Features
+
+* add non-destructive action map suspension ([8198d7f](https://github.com/Natteens/Plug-Input-Pack/commit/8198d7f5ff5e878f5f1974f8c6cf5ee430aee5c2))
+
 # [2.3.0](https://github.com/Natteens/Plug-Input-Pack/compare/v2.2.3...v2.3.0) (2026-08-19)
 
 
