@@ -1,3 +1,10 @@
+## [2.4.1](https://github.com/Natteens/Plug-Input-Pack/compare/v2.4.0...v2.4.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* rebind device events across play sessions ([c464034](https://github.com/Natteens/Plug-Input-Pack/commit/c464034e9b23c31d75c756776a2532373f55448b))
+
 # [2.4.0](https://github.com/Natteens/Plug-Input-Pack/compare/v2.3.0...v2.4.0) (2026-08-30)
 
 
