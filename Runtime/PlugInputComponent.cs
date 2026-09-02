@@ -19,6 +19,8 @@ namespace PlugInputPack
         private bool           _originalCursorVisible;
         private bool           _hasManualOverride;
         private bool           _inputEventsSubscribed;
+        private bool           _deviceEventsSubscribed;
+        private int            _deviceEventGeneration = -1;
         private bool           _inputSystemInitialized;
 
         private InputActionAsset _runtimeAsset; // Instância isolada
@@ -72,6 +74,7 @@ namespace PlugInputPack
 
         private void OnEnable()
         {
+            SetupDeviceEvents();
             if (!_inputSystemInitialized || _runtimeAsset == null) return;
 
             SubscribeInputEvents(_runtimeAsset);
@@ -80,6 +83,7 @@ namespace PlugInputPack
 
         private void OnDisable()
         {
+            TeardownDeviceEvents();
             if (!_inputSystemInitialized || _runtimeAsset == null) return;
 
             _runtimeAsset.Disable();
@@ -123,6 +127,8 @@ namespace PlugInputPack
 
         private void Update()
         {
+            SetupDeviceEvents();
+
             var flushResults = _cache.FlushStates();
             for (int i = 0; i < flushResults.Count; i++)
             {
@@ -151,9 +157,7 @@ namespace PlugInputPack
             Cursor.lockState = _originalCursorLockMode;
             Cursor.visible   = _originalCursorVisible;
 
-            PlugInputDeviceManager.OnDeviceChanged      -= HandleDeviceChanged;
-            PlugInputDeviceManager.OnDeviceConnected    -= HandleDeviceConnected;
-            PlugInputDeviceManager.OnDeviceDisconnected -= HandleDeviceDisconnected;
+            TeardownDeviceEvents();
 
             OnInputSystemDestroyed?.Invoke();
 
@@ -252,9 +256,24 @@ namespace PlugInputPack
 
         private void SetupDeviceEvents()
         {
+            int currentGeneration = PlugInputDeviceManager.EventGeneration;
+            if (_deviceEventsSubscribed && _deviceEventGeneration == currentGeneration) return;
+
+            TeardownDeviceEvents();
             PlugInputDeviceManager.OnDeviceChanged      += HandleDeviceChanged;
             PlugInputDeviceManager.OnDeviceConnected    += HandleDeviceConnected;
             PlugInputDeviceManager.OnDeviceDisconnected += HandleDeviceDisconnected;
+            _deviceEventsSubscribed = true;
+            _deviceEventGeneration = currentGeneration;
+        }
+
+        private void TeardownDeviceEvents()
+        {
+            PlugInputDeviceManager.OnDeviceChanged      -= HandleDeviceChanged;
+            PlugInputDeviceManager.OnDeviceConnected    -= HandleDeviceConnected;
+            PlugInputDeviceManager.OnDeviceDisconnected -= HandleDeviceDisconnected;
+            _deviceEventsSubscribed = false;
+            _deviceEventGeneration = -1;
         }
 
         private static readonly string[] s_deviceTypeNames =

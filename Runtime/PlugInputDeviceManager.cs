@@ -43,6 +43,16 @@ namespace PlugInputPack
         public static event Action<DeviceType, DeviceType> OnDeviceChanged;
         public static event Action<InputDevice>            OnDeviceConnected;
         public static event Action<InputDevice>            OnDeviceDisconnected;
+        internal static int EventGeneration { get; private set; }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            OnDeviceChanged = null;
+            OnDeviceConnected = null;
+            OnDeviceDisconnected = null;
+            unchecked { EventGeneration++; }
+        }
 
         // ── Properties ─────────────────────────────────────────────────────────────
 
@@ -228,9 +238,6 @@ namespace PlugInputPack
             InputSystem.onDeviceChange -= OnInputDeviceChange;
             _devicesByType.Clear();
             _deviceTypeCache.Clear();
-            OnDeviceChanged      = null;
-            OnDeviceConnected    = null;
-            OnDeviceDisconnected = null;
         }
     }
 }
